@@ -2,7 +2,7 @@
 name = "theme-analysis-ui"
 version = "0.1.0"
 description = ""
-authors = ["Steve Gibbard <steve.gibbard"ons.gov.uk>"]
+authors = ["Steve Gibbard <steve.gibbard@ons.gov.uk>"]
 packages = [{ include = "theme_analysis_ui", from = "src" }]
 readme = "README.md"
 license = "MIT"
