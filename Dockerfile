@@ -1,0 +1,57 @@
+# syntax=docker/dockerfile:1.7
+
+FROM python:3.12-slim-bookworm AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    POETRY_HOME=/opt/poetry \
+    POETRY_VERSION=2.3.2 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_IN_PROJECT=true
+
+ENV PATH="${POETRY_HOME}/bin:${PATH}"
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -sSL https://install.python-poetry.org | python3 -
+
+COPY pyproject.toml poetry.lock ./
+COPY src ./src
+COPY scripts ./scripts
+
+# Install runtime dependencies only.
+RUN poetry install --without dev --no-root
+
+# Fetch ONS templates at build-time so runtime does not need network access.
+RUN ./scripts/fetch_ons_templates.sh
+
+# Gunicorn is used for production serving on Cloud Run.
+RUN .venv/bin/pip install --no-cache-dir gunicorn==23.0.0
+
+FROM python:3.12-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:${PATH}" \
+    PORT=8080
+
+WORKDIR /app
+
+RUN groupadd --system app \
+    && useradd --system --gid app --home /home/app --create-home app
+
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
+
+RUN chown -R app:app /app
+
+USER app
+
+EXPOSE 8080
+
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "8", "--timeout", "60", "--chdir", "/app/src", "theme_analysis_ui.app:create_app()"]

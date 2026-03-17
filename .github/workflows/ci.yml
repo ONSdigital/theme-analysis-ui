@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch ONS Design System templates
+        run: |
+          chmod +x scripts/fetch_ons_templates.sh
+          ./scripts/fetch_ons_templates.sh
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry 2.3.2
+        run: |
+          pipx install poetry==2.3.2
+          echo "POETRY_HOME=$(pipx environment --value PIPX_BIN_DIR)" >> $GITHUB_ENV
+          echo "PATH=$(pipx environment --value PIPX_BIN_DIR):$PATH" >> $GITHUB_ENV
+
+      - name: Configure Poetry
+        run: |
+          poetry config virtualenvs.create true
+
+      - name: Cache Poetry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Install deps
+        run: |
+          poetry install --with dev
+
+      - name: Pre-commit
+        run: |
+          poetry run pre-commit run --all-files
+
+      - name: Lint & Security & Types
+        run: |
+          poetry run ruff check .
+          poetry run black --check .
+          poetry run mypy src/theme_analysis_ui tests || true
+          poetry run bandit -q -r src || true
+
+      - name: Tests
+        run: |
+          poetry run pytest --maxfail=1 --disable-warnings --cov=src/theme_analysis_ui --cov-report term-missing --cov-fail-under=80

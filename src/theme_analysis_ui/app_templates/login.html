@@ -1,0 +1,90 @@
+{% extends "core.html" %}
+{%- set current_path = url_for("ui.login") -%}
+{% from "components/panel/_macro.njk" import onsPanel %}
+{% from "components/password/_macro.njk" import onsPassword %}
+{% from "components/input/_macro.njk" import onsInput %}
+{% from "components/button/_macro.njk" import onsButton %}
+
+{% block header %}
+    {{
+        onsHeader({
+            "title": pageConfig.header.title | default(pageConfig.title),
+            "classes": pageConfig.header.classes,
+            "variants": pageConfig.header.variants,
+            "wide": pageConfig.wide,
+            "language": pageConfig.language,
+            "button": pageConfig.signoutButton,
+            "toggleNavigationButton": pageConfig.toggleNavigationButton,
+            "navigation": pageConfig.navigation,
+            "browserBanner": pageConfig.browserBanner,
+            "phase": pageConfig.phase,
+            "assetsURL": assetsURL,
+            "serviceLinks": pageConfig.serviceLinks,
+            "mastheadLogo": pageConfig.header.mastheadLogo,
+            "noMasthead": pageConfig.header.noMasthead,
+            "orgLogo": pageConfig.header.orgLogo,
+            "orgMobileLogo": pageConfig.header.orgMobileLogo,
+            "orgLogoAlt": pageConfig.header.orgLogoAlt,
+            "orgLogoHref": pageConfig.header.orgLogoHref,
+            "titleLogo": pageConfig.header.titleLogo,
+            "titleLogoClasses": pageConfig.header.titleLogoClasses,
+            "titleLogoMobile": pageConfig.header.titleLogoMobile,
+            "titleLogoMobileClasses": pageConfig.header.titleLogoMobileClasses,
+            "titleLogoAlt": pageConfig.header.titleLogoAlt,
+            "titleLogoHref": pageConfig.header.titleLogoHref,
+            "customHeaderLogo": pageConfig.header.customHeaderLogo
+        })
+    }}
+{% endblock %}
+
+{% block pageContent %}
+
+    {% set button_url = url_for('ui.theme_meta') %}
+    <div class="ons-grid__col ons-col-12@m ">
+        <br>
+        <h1>Sign In</h1>
+        {{
+            onsPanel({
+                "id": 'success-id',
+                "body": 'Contact <strong>steve.gibbard@ons.gov.uk</strong> for access to this PoC solution',
+                "spacious": false
+            })
+        }}
+        <br>
+        <form method="POST" action="{{ url_for('ui.check_login') }}">
+            {{
+                onsInput({
+                    "id": "username",
+                    "name": "username",
+                    "type": "email",
+                    "autocomplete": "email",
+                    "searchButton": false,
+                    "label": {
+                        "text": "Email address"
+                    }
+                })
+            }}
+            {{
+
+                onsPassword({
+                    "id": "password",
+                    "name": "password",
+                    "label": {
+                        "text": "Password"
+                    },
+                    "searchButton": false
+                })
+            }}
+            <br>
+            {{ onsButton({
+                "id": "save-values-button",
+                "text": "Login",
+                })
+            }}
+    </form>
+    <br>
+    </div>
+
+
+
+{% endblock %}

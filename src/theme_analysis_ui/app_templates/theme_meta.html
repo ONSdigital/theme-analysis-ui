@@ -1,0 +1,131 @@
+{% extends "core.html" %}
+{% from "components/panel/_macro.njk" import onsPanel %}
+{% from "components/button/_macro.njk" import onsButton %}
+{% from "components/field/_macro.njk" import onsField %}
+{% from "components/label/_macro.njk" import onsLabel %}
+
+{% set containerClasses = "ons-container--full-width" %}
+{% set page_title = "Theme analysis metadata" %}
+
+{% from "components/button/_macro.njk" import onsButton %}
+{% from "components/radios/_macro.njk" import onsRadios %}
+{% from "components/input/_macro.njk" import onsInput %}
+{% from "components/textarea/_macro.njk" import onsTextarea %}
+{% from "components/question/_macro.njk" import onsQuestion %}
+
+{% set guidance_enabled = true %}
+{% set guidance_text = "e.g 'Why did you rate your GP service as poor?'" %}
+
+{% set justification_enabled = false %}
+{% set justification_title = "Why are we asking this?" %}
+{% set justification_text = "Justification content goes here, it can be as long as needed and include <a href='#'>links</a>." %}
+
+{% set response_type = "text" %}
+{% set response_name = "meta_response" %}
+{% set response_options = [
+    {"value": "option_1", "text": "Option 1"},
+    {"value": "option_2", "text": "Option 2"},
+    {"value": "option_3", "text": "Option 3"}
+] %}
+{% set button_text = "Submit response" %}
+{% set limit = 1000 %}
+{% set rows = 10 %}
+
+{% block pageContent %}
+<div class="ons-page__container ons-container ons-u-pt-m ons-u-pb-l">
+    <main id="main-content" class="ons-grid ons-grid--column@xxs@s">
+        <div class="ons-grid__col ons-col-12 ons-col@l-10">
+            {% block page_body %}
+                <form method="POST" action="{{ url_for('ui.save_meta') }}">
+        <input type="hidden" name="theme_name" value="{{ theme_name }}">
+
+        {# Build the base options object #}
+        {% set question_opts = {
+        "title": "What is the question associated with the feedback you are analysing?",
+        "classes": "ons-u-mt-no",
+        "legendIsQuestionTitle": true
+        } %}
+
+        {# Add optional sections only when enabled #}
+        {% if guidance_enabled %}
+        {% set _ = question_opts.update({
+            "guidance": { "content": guidance_text }
+        }) %}
+        {% endif %}
+
+        {% if justification_enabled %}
+        {% set _ = question_opts.update({
+            "justification": {
+            "title": justification_title,
+            "content": justification_text
+            }
+        }) %}
+        {% endif %}
+
+        {# Single render, inner control just for the response widget #}
+        {% call onsQuestion(question_opts) %}
+        {% if response_type == "radio" %}
+            {{ onsRadios({
+            "name": response_name,
+            "dontWrap": true,
+            "radios": response_options
+            }) }}
+        {% elif response_type == "text" %}
+            {{ onsInput({
+            "id": response_name,
+            "name": response_name,
+            "type": "text",
+            "searchButton": false,
+            "attributes": { "required": true }
+            }) }}
+        {% elif response_type == "textarea" %}
+            {{
+            onsTextarea({
+                "id": response_name,
+                "name": response_name,
+                "width": "30",
+                "rows": rows,
+                "attributes": { "required": true },
+                "charCheckLimit": {
+                    "limit": limit,
+                    "charCountSingular": "You have {x} character remaining",
+                    "charCountPlural": "You have {x} characters remaining",
+                    "charCountOverLimitSingular": "{x} character too many",
+                    "charCountOverLimitPlural": "{x} characters too many"
+                }
+            })
+            }}
+        {% endif %}
+        {% endcall %}
+
+        {{ onsButton({
+            "id": "save-values-button",
+            "variants": 'loader',
+            "text": button_text,
+            })
+        }}
+    </form>
+    <script>
+      // Mitigate against a user clicking back button,
+      // which may cause loss of data in this beta survey.
+      // Push a new history state so the first Back press stays on this page
+      window.history.pushState({ page: "question" }, "", window.location.href);
+
+      window.addEventListener("popstate", function (event) {
+        const ok = window.confirm(
+          "Going back is not supported in this beta survey, continuing may lose your answers. Do you still want to go back?"
+        );
+
+        if (!ok) {
+          // User cancelled: push state again so Back keeps them on this page
+          window.history.pushState({ page: "question" }, "", window.location.href);
+        }
+        // If they clicked OK, do nothing:
+        // the browser will continue navigating back normally.
+      });
+    </script>
+    {% endblock %}
+        </div>
+    </main>
+</div>
+{% endblock %}

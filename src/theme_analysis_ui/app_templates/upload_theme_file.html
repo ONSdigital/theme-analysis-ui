@@ -1,0 +1,84 @@
+{% extends "core.html" %}
+{% from "components/panel/_macro.njk" import onsPanel %}
+{% from "components/button/_macro.njk" import onsButton %}
+{% from "components/field/_macro.njk" import onsField %}
+{% from "components/label/_macro.njk" import onsLabel %}
+
+{% set containerClasses = "ons-container--full-width" %}
+{% set page_title = "Theme analysis uploads" %}
+
+
+{% block pageContent %}
+<div class="ons-page__container ons-container ons-u-pt-m ons-u-pb-l">
+    <main id="main-content" class="ons-grid ons-grid--column@xxs@s">
+        <div class="ons-grid__col ons-col-12 ons-col@l-10">
+            {% block page_body %}
+                <main id="main-content">
+                   {% if upload_result is none %}
+                    {{
+                        onsPanel({
+                            "spacious": true,
+                            "body": '<p>Upload the feedback associated with the question: <br><strong>' +meta_question+ '</strong></p>
+                            <p>Submit a CSV file with a <strong>"user"</strong> column that contains a unique id referencing a respondent and a <strong>"feedback_comments"</strong> column containing free text response.</p>'
+                        })
+                    }}
+                    <br>
+                   {% endif %}
+
+                    {% if errors %}
+                        {% call onsPanel({"variant": "error", "title": "We could not accept the upload"}) %}
+                            <ul>
+                                {% for error in errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endcall %}
+                        <br>
+                    {% endif %}
+
+                    {% if upload_result %}
+                        {% call onsPanel({"variant": "success", "title": "Upload completed"}) %}
+                            <p><strong>{{ upload_result.filename }}</strong> was stored successfully at <br><code>{{ upload_result.location }}</code>.</p>
+                            <p>The corresponding metadata file is available at <br><code>{{ upload_result.metadata_location }}</code>.</p>
+                        {% endcall %}
+                        <br>
+                    {% endif %}
+
+                    {% if upload_result is none %}
+                    <form method="post" action="{{ url_for('ui.handle_upload') }}" enctype="multipart/form-data">
+                        {% set upload_label %}
+                            {{
+                                onsLabel({
+                                    "for": "theme-analysis-upload",
+                                    "text": "Choose a file",
+                                    "description": "Only CSV format is accepted."
+                                })
+                            }}
+                        {% endset %}
+
+                        {% call onsField({"id": "theme-analysis-upload-field"}) %}
+                            {{ upload_label | safe }}
+                            <input
+                                class="ons-input ons-input--upload"
+                                id="theme-analysis-upload"
+                                name="file"
+                                type="file"
+                                aria-describedby="theme-analysis-upload-hint"
+                            />
+                        {% endcall %}
+                        <br>
+                        <div>
+                            {{ onsButton({"text": "Upload file", "type": "submit"}) }}
+                        </div>
+                    </form>
+                    {% else %}
+                    <div>
+                        {{ onsButton({"text": "Confirm choices", "url": url_for('ui.confirm')}) }}
+                    </div>
+                    {% endif %}
+                </main>
+            {% endblock %}
+        </div>
+    </main>
+</div>
+{% endblock %}

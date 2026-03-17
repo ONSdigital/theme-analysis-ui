@@ -1,0 +1,31 @@
+site_name: Theme Analysis UI
+site_description: Flask upload service styled with the ONS Design System
+site_url: ""
+nav:
+  - Overview: index.md
+  - Reference:
+      - theme_analysis_ui: reference/theme_analysis_ui.md
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - content.code.copy
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            separate_signature: true
+markdown_extensions:
+  - admonition
+  - def_list
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+extra_css: []
+extra_javascript: []

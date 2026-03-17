@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+*.ipynb_checkpoints/
+
+# Poetry
+.poetry/
+
+# Env
+.env
+.venv/
+
+# Coverage
+.coverage
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+
+# App data
+uploads/
+!uploads/.gitkeep
+
+# Downloaded ONS templates
+src/theme_analysis_ui/templates/components
+src/theme_analysis_ui/templates/layout
+users.json
