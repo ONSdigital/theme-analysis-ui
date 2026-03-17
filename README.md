@@ -68,13 +68,13 @@ With Podman:
 podman build -t theme-analysis-ui:local .
 ```
 
-### Run locally
+### Run container locally
 
 ```bash
 export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 docker run --rm -p 8080:8080 \
-  -e FILE_STORE=LOCAL \
-  -e FLASK_SECRET_KEY \
+  -e FILE_STORE=GCP \
+  -e FLASK_SECRET_KEY=<INSERT-REAL-SECRET> \
   -e GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-key.json \
   -e GOOGLE_CLOUD_PROJECT=<PROJECT-NAME> \
   -v "<path-to>/application_default_credentials.json:/app/secrets/gcp-key.json:Z" \
@@ -86,8 +86,8 @@ With Podman:
 ```bash
 export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 podman run --rm -p 8080:8080 \
-  -e FILE_STORE=LOCAL \
-  -e FLASK_SECRET_KEY \
+  -e FILE_STORE=GCP \
+  -e FLASK_SECRET_KEY=<INSERT-REAL-SECRET> \
   -e GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-key.json \
   -e GOOGLE_CLOUD_PROJECT=<PROJECT-NAME> \
   -v "<path-to>/application_default_credentials.json:/app/secrets/gcp-key.json:Z" \
