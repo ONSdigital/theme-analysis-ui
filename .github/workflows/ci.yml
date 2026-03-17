@@ -2,12 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install Poetry 2.3.2
         run: |
@@ -47,13 +48,15 @@ jobs:
         run: |
           poetry run pre-commit run --all-files
 
-      - name: Lint & Security & Types
+      - name: Lint
         run: |
-          poetry run ruff check .
-          poetry run black --check .
-          poetry run mypy src/theme_analysis_ui tests || true
-          poetry run bandit -q -r src || true
+          make lint
 
       - name: Tests
         run: |
-          poetry run pytest --maxfail=1 --disable-warnings --cov=src/theme_analysis_ui --cov-report term-missing --cov-fail-under=80
+          poetry run pytest \
+            --maxfail=1 \
+            --disable-warnings \
+            --cov=src/theme_analysis_ui \
+            --cov-report=term-missing \
+            --cov-fail-under=80

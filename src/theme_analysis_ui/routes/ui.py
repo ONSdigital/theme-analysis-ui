@@ -248,7 +248,7 @@ def _credentials_match(registered_users: dict[str, str], username: str, password
         return False
 
     if stored_password.startswith(("pbkdf2:", "scrypt:", "argon2:")):
-        return cast(bool, check_password_hash(stored_password, password))
+        return check_password_hash(stored_password, password)
     return hmac.compare_digest(stored_password, password)
 
 
