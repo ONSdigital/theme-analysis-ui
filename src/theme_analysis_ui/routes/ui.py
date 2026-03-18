@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-import hmac
 from http import HTTPStatus
 import json
 from pathlib import Path, PurePosixPath
@@ -249,7 +248,9 @@ def _credentials_match(registered_users: dict[str, str], username: str, password
 
     if stored_password.startswith(("pbkdf2:", "scrypt:", "argon2:")):
         return check_password_hash(stored_password, password)
-    return hmac.compare_digest(stored_password, password)
+
+    print("Error: stored password does not appear to be a valid hash.")
+    return False
 
 
 @ui_blueprint.get("/cookies")
