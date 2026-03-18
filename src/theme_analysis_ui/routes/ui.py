@@ -199,25 +199,29 @@ def check_login() -> ResponseReturnValue:
 
 
 def _load_registered_users() -> dict[str, str]:
-    """Load login credentials from the configured GCS users JSON file."""
+    """Load login credentials from the configured users JSON file."""
 
     provider = current_app.config.get("auth_users_provider")
     if callable(provider):
         return cast(dict[str, str], provider())
 
     storage_backend: StorageBackend = current_app.config["storage_backend"]
-    if not isinstance(storage_backend, GCPStorageBackend):
-        raise RuntimeError("Login requires a GCP storage backend.")
 
-    settings = current_app.config["settings"]
-    users_bucket = settings.bucket_name
-    if not users_bucket:
-        raise RuntimeError("A bucket name is required to load login users.")
+    if isinstance(storage_backend, GCPStorageBackend):
+        settings = current_app.config["settings"]
+        users_bucket = settings.bucket_name
+        if not users_bucket:
+            raise RuntimeError("A bucket name is required to load login users.")
 
-    users_blob = "users.json"
-    raw_payload = (
-        storage_backend.get_client().bucket(users_bucket).blob(users_blob).download_as_text()
-    )
+        raw_payload = (
+            storage_backend.get_client().bucket(users_bucket).blob("users.json").download_as_text()
+        )
+    else:
+        users_file = Path(current_app.root_path).parent.parent / "users.json"
+        if not users_file.exists():
+            raise RuntimeError(f"Local login file not found: {users_file}")
+        raw_payload = users_file.read_text(encoding="utf-8")
+
     parsed_payload = json.loads(raw_payload)
 
     if isinstance(parsed_payload, dict):
@@ -236,6 +240,7 @@ def _load_registered_users() -> dict[str, str]:
             if username and password:
                 users[username] = password
         return users
+
     raise ValueError("users.json must contain a dictionary or list of user records.")
 
 

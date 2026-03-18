@@ -13,6 +13,7 @@ from werkzeug.security import generate_password_hash
 import yaml
 
 from theme_analysis_ui.app import create_app
+from theme_analysis_ui.auth.password_utils import generate_password_hash_value
 from theme_analysis_ui.config import Settings
 from theme_analysis_ui.routes import ui as ui_routes
 from theme_analysis_ui.storage.local import LocalStorageBackend
@@ -251,7 +252,7 @@ def test_check_login_accepts_known_user_and_redirects(
 
     client, _ = test_client
     client.application.config["auth_users_provider"] = lambda: {
-        "known.user@example.com": TEST_PASSWORD
+        "known.user@example.com": generate_password_hash_value(TEST_PASSWORD)
     }
     with client.session_transaction() as flask_session:
         flask_session[ui_routes.POST_LOGIN_REDIRECT_KEY] = "/theme_meta"
