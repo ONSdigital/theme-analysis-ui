@@ -40,6 +40,14 @@ are missing. To test another release, export `ONS_RELEASE=<tag>` before running 
 
 ## Running the application
 
+Before running the application a ```users.json``` with an empty array needs to be created in the project root and a new user created to access the system, see [User Management](user-management).
+
+```users.json```
+```json
+[]
+```
+
+
 Use the provided Make target to run the Flask development server:
 
 ```bash
@@ -54,7 +62,7 @@ upload form rendered through the ONS Design System layout.
 
 The repository now includes a production-oriented `Dockerfile` suitable for local container
 runtime use and Google Cloud Run deployment. It uses a multi-stage build, installs only runtime
-dependencies, runs as a non-root user, and serves the app with Gunicorn on port `8080`.
+dependencies, runs as a non-root user, and serves the app with Gunicorn on port `8000`.
 
 ### Build the image
 
@@ -72,7 +80,7 @@ podman build -t theme-analysis-ui:local .
 
 ```bash
 export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-docker run --rm -p 8080:8080 \
+docker run --rm -p 8000:8000 \
   -e FILE_STORE=GCP \
   -e FLASK_SECRET_KEY=<INSERT-REAL-SECRET> \
   -e GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-key.json \
@@ -85,7 +93,7 @@ With Podman:
 
 ```bash
 export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-podman run --rm -p 8080:8080 \
+podman run --rm -p 8000:8000 \
   -e FILE_STORE=GCP \
   -e FLASK_SECRET_KEY=<INSERT-REAL-SECRET> \
   -e GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-key.json \
@@ -97,11 +105,11 @@ podman run --rm -p 8080:8080 \
 When using Docker Desktop alternatives such as Colima, start Colima first (for example
 `colima start`) and then run the same `docker build` / `docker run` commands.
 
-Visit http://127.0.0.1:8080 once the container is running.
+Visit http://127.0.0.1:8000 once the container is running.
 
 ### Cloud Run notes
 
-- Cloud Run injects `PORT`; the image defaults to `8080` and listens on `0.0.0.0`.
+- Cloud Run injects `PORT`; the image defaults to `8000` and listens on `0.0.0.0`.
 - Prefer `FILE_STORE=GCP` in Cloud Run and set `BUCKET_NAME`.
 - For `FILE_STORE=GCP`, ensure Application Default Credentials are available: use a Cloud Run service account with Storage access (recommended) or provide `GOOGLE_APPLICATION_CREDENTIALS` in local container runs.
 - Do not commit secrets; inject `FLASK_SECRET_KEY` via Secret Manager or Cloud Run environment
@@ -165,6 +173,11 @@ poetry run pre-commit run --all-files
 Coverage must stay above 80% and Ruff/Bandit/mypy must pass before opening a PR. All modules,
 including tests, follow Google-style docstrings written in British English so the MkDocs reference
 remains consistent.
+
+## User Management
+
+User accounts are managed via a JSON file (users.json) stored in GCS, containing records with username, password, and role (user, admin, or tester). Passwords are stored as secure hashes generated using Werkzeug and must never be stored in plaintext. Users should be created or updated using the offline provisioning script, which ensures passwords are correctly hashed before persistence. See [scripts/manage_users.py](./scripts/manage_users.py)
+ for usage and examples.
 
 ## Application Workflow
 

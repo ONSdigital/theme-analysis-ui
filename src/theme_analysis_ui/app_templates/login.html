@@ -51,6 +51,20 @@
             })
         }}
         <br>
+        {% if errors %}
+            {%
+                call onsPanel({
+                    "title": "There is a problem validating your credentials",
+                    "variant": "error"
+                })
+            %}
+                {% for error in errors %}
+                    {{error}}
+                    <br>
+                {% endfor %}
+            {% endcall %}
+            <br>
+        {% endif %}
         <form method="POST" action="{{ url_for('ui.check_login') }}">
             {{
                 onsInput({
