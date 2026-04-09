@@ -244,4 +244,3 @@ remains consistent.
 
 User accounts are managed via a JSON file (users.json) stored in GCS, containing records with username, password, and role (user, admin, or tester). Passwords are stored as secure hashes generated using Werkzeug and must never be stored in plaintext. Users should be created or updated using the offline provisioning script, which ensures passwords are correctly hashed before persistence. See [scripts/manage_users.py](./scripts/manage_users.py)
  for usage and examples.
-
