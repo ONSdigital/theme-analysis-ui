@@ -38,7 +38,7 @@ FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:${PATH}" \
-    PORT=8080
+    PORT=8000
 
 WORKDIR /app
 
@@ -52,6 +52,6 @@ RUN chown -R app:app /app
 
 USER app
 
-EXPOSE 8080
+EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "8", "--timeout", "60", "--chdir", "/app/src", "theme_analysis_ui.app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "8", "--timeout", "60", "--chdir", "/app/src", "theme_analysis_ui.app:create_app()"]
