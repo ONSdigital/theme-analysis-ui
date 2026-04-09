@@ -1,9 +1,31 @@
 # Theme Analysis UI
 
 Theme Analysis UI is a Flask application that wraps the [ONS Design System](https://service-manual.ons.gov.uk/design-system)
-to provide a consistent interface for uploading qualitative analysis files. The service ships with
-storage abstractions for local disk and Google Cloud Storage so environments can switch behaviour
-with environment variables rather than code forks.
+to provide a consistent interface for uploading qualitative analysis files.
+
+The service ships with storage abstractions for local disk and Google Cloud Storage so testing can switch behaviour with environment variables rather than code forks.
+
+## Application Workflow
+
+The current application workflow is as follows:
+
+- On load the application routes to '/' but will redirect to '/login' when the user is not authenticated
+- The login page requires a valid username and password and will reroute to '/' with successful credentials
+- On clicking the 'Start' button the application routes to '/theme_meta', renders theme_meta.html and asks 'What is the question associated with the feedback you are analysing?'
+  - On this page the user must answer the question before progression
+  - The answer is stored in session state
+- On clicking the 'Submit response' button the application routes to '/save_meta', renders upload_theme_file.html and asks the user to 'Choose a file' to upload
+  - On this page the user must select a CSV file for upload before progression
+- On clicking the 'Upload button'
+  - The .csv and a .yaml file are stored in the backend
+  - The .csv is the respondent feedback being analysed
+  - The .yaml is a metadata file including the question associated with the respondent feedback
+  - The '/upload' route is displayed showing the locations of the stored files
+  - A button "Confirm choices" is rendered
+- On clicking "Confirm choices" the application
+  - Routes to a placeholder 'confirm' page
+  - Starts the theme analysis logic
+  - Reports the workflow job execution id that was started
 
 ## Stack
 
@@ -38,6 +60,34 @@ render ONS-styled components locally (the CSS link in the app points to the same
 directory is gitignored; re-run the script after cloning or when switching branches if the templates
 are missing. To test another release, export `ONS_RELEASE=<tag>` before running the script.
 
+## Environment Variables
+
+An [example .env file](.env.example) is available in the project root.
+
+The following environment variables can be used to define UI behaviour.
+
+**FLASK_ENV** - defaults to 'development'
+
+**FILE_STORE** - defaults to 'LOCAL', should be set as 'GCP' for cloud deployment
+
+**BUCKET_NAME** - the name of the GCP bucket for staging uploaded files.  Only required when FILE_STORE is set as 'GCP'
+
+**UPLOAD_DIR** - defaults to 'uploads' when running in a local filestore
+
+**FLASK_SECRET_KEY** - must be a secure key in deployment
+
+The following environment variables are used to trigger a workflow to perform theme analysis in a cloud run job.
+
+**PROJECT_ID** - The GCP project name
+
+**WORKFLOW_REGION** - The GCP region where the workflow is defined
+
+**WORKFLOW_NAME** - The workflow name in GCP
+
+**CR_JOB_NAME** - The cloud run job name that the workflow will trigger
+
+**CR_JOB_REGION** - The GCP region where the cloud run job is defined
+
 ## Running the application
 
 Use the provided Make target to run the Flask development server:
@@ -68,13 +118,28 @@ With Podman:
 podman build -t theme-analysis-ui:local .
 ```
 
+With Podman and amd build:
+
+```bash
+podman build --platform linux/amd64 \
+  -t <region>-docker.pkg.dev/<gcp-project-name>/theme-analysis-ui/theme-analysis-ui:<tag> \
+  .
+```
+
+With Podman push to artifact registry:
+
+```bash
+podman push <region>-docker.pkg.dev/<gcp-project-name>/theme-analysis-ui/theme-analysis-ui:<tag>
+```
+
 ### Run container locally
 
 ```bash
 export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-docker run --rm -p 8080:8080 \
+docker run --rm -p 8000:8000 \
   -e FILE_STORE=GCP \
   -e FLASK_SECRET_KEY=<INSERT-REAL-SECRET> \
+  -e BUCKET_NAME=<GCP-STAGING-BUCKET> \
   -e GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-key.json \
   -e GOOGLE_CLOUD_PROJECT=<PROJECT-NAME> \
   -v "<path-to>/application_default_credentials.json:/app/secrets/gcp-key.json:Z" \
@@ -85,9 +150,10 @@ With Podman:
 
 ```bash
 export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-podman run --rm -p 8080:8080 \
+podman run --rm -p 8000:8000 \
   -e FILE_STORE=GCP \
   -e FLASK_SECRET_KEY=<INSERT-REAL-SECRET> \
+  -e BUCKET_NAME=<GCP-STAGING-BUCKET> \
   -e GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-key.json \
   -e GOOGLE_CLOUD_PROJECT=<PROJECT-NAME> \
   -v "<path-to>/application_default_credentials.json:/app/secrets/gcp-key.json:Z" \
@@ -165,16 +231,3 @@ poetry run pre-commit run --all-files
 Coverage must stay above 80% and Ruff/Bandit/mypy must pass before opening a PR. All modules,
 including tests, follow Google-style docstrings written in British English so the MkDocs reference
 remains consistent.
-
-## Application Workflow
-
-The current application workflow is as foolows:
-
-- On load the application routes to '/' and renders index.html
-- On clicking the 'Start' button the application routes to '/theme_meta', renders theme_meta.html and asks 'What is the question associated with the feedback you are analysing?'
-  - On this page the user must answer the question before progression
-  - The answer is stored in session state
-- On clicking the 'Submit response' button the application routes to 'save_meta', renders upload_theme_file.html and asks the user to 'Choose a file' to upload
-  - On this page the user must select a file before progression
-- Once a file is uploaded, the /upload route is displayed and a button "Confirm choices" is rendered
-- On clicking "Confirm choices" the application routes to a placeholder page.
