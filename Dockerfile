@@ -54,4 +54,4 @@ USER app
 
 EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "8", "--timeout", "60", "--chdir", "/app/src", "theme_analysis_ui.app:create_app()"]
+CMD ["/bin/sh", "-c", "exec python -m gunicorn --bind 0.0.0.0:8000 --workers 2 --threads 8 --timeout 60 --chdir /app/src 'theme_analysis_ui.app:create_app()'"]
