@@ -28,3 +28,5 @@ uploads/
 src/theme_analysis_ui/templates/components
 src/theme_analysis_ui/templates/layout
 users.json
+
+.DS_Store
