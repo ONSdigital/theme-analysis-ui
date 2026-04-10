@@ -88,6 +88,12 @@ The following environment variables are used to trigger a workflow to perform th
 
 **CR_JOB_REGION** - The GCP region where the cloud run job is defined
 
+## Example Data and Question
+
+A small set of synthetic example feedback is in [/data](data).
+
+This feedback can be used with a question like _Why did you rate this service as poor or very poor?_
+
 ## Running the application
 
 Before running the application a ```users.json``` with an empty array needs to be created in the project root and a new user created to access the system, see [User Management](user-management).
