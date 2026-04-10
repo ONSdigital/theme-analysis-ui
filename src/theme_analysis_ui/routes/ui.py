@@ -22,6 +22,8 @@ from flask.typing import ResponseReturnValue
 from werkzeug.security import check_password_hash
 import yaml
 
+from theme_analysis_ui.utils.workflow_utils import get_workflow_config, trigger_workflow
+
 from ..storage import GCPStorageBackend, StorageBackend
 
 DEFAULT_SURVEY = "Example Survey"
@@ -125,6 +127,13 @@ def handle_upload() -> ResponseReturnValue:
     )
     metadata_document = _build_theme_metadata_document(stored_location)
     metadata_location = _persist_theme_metadata(storage, stored_location, metadata_document)
+
+    # Save the upload information
+    session["upload"] = {}
+    session["upload"]["csv_file"] = stored_location
+    session["upload"]["meta_file"] = metadata_location
+    session.modified = True  # Ensure session is saved even if only modified in-place
+
     return render_template(
         "upload_theme_file.html",
         page_title="Theme analysis uploads",
@@ -143,10 +152,37 @@ def handle_upload() -> ResponseReturnValue:
 def confirm() -> ResponseReturnValue:
     """Render a placeholder confirmation page for future actions."""
 
+    settings = current_app.config["settings"]
+    staging_bucket = settings.bucket_name
+
+    # Get upload information from the session
+    upload_info = session.get("upload", {})
+    csv_object = upload_info.get("csv_file")
+    metadata_object = upload_info.get("meta_file")
+    question = session.get("meta", {}).get("question", "No question provided")
+    output_prefix = f"outputs/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+    project_id, region, workflow_name, cr_job_name, cr_job_region = get_workflow_config()
+
+    # Trigger theme analysis workflow after upload
+    execution_name = trigger_workflow(
+        project_id=project_id,
+        region=region,
+        workflow_name=workflow_name,
+        staging_bucket=staging_bucket,
+        csv_object=csv_object,
+        metadata_object=metadata_object,
+        question=question,
+        output_prefix=output_prefix,
+        job_name=cr_job_name,
+        job_region=cr_job_region,
+    )
+
     return render_template(
         "confirm.html",
         page_title="Confirm selection",
         page_config=None,
+        execution_name=execution_name,
     )
 
 

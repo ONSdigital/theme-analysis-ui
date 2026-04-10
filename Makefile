@@ -13,7 +13,7 @@ lint:
 	poetry run ruff check .
 	poetry run black --check .
 	poetry run mypy src/$(PKG) tests
-	poetry run bandit -q -r src/$(PKG)
+	poetry run bandit -r src/$(PKG)
 
 test:
 	poetry run pytest -q --maxfail=1 --disable-warnings \

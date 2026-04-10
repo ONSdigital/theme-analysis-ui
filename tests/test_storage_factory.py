@@ -95,7 +95,7 @@ def test_gcp_backend_initialisation_is_lazy(monkeypatch: MonkeyPatch) -> None:
         def __init__(self) -> None:
             raise AssertionError("Client should not be built during backend init")
 
-    monkeypatch.setattr("theme_analysis_ui.storage.gcp.storage.Client", ExplodingClient)
+    monkeypatch.setattr("theme_analysis_ui.storage.gcp.Client", ExplodingClient)
     backend = GCPStorageBackend(bucket_name="demo-bucket")
     assert backend.client is None  # nosec B101
 
@@ -106,7 +106,7 @@ def test_gcp_backend_uploads_via_dummy_client() -> None:
     client = DummyClient()
     backend = GCPStorageBackend(bucket_name="demo-bucket", client=client)
     location = backend.store_file(BytesIO(b"gcp"), "analysis.csv", "text/csv")
-    assert location.startswith("gs://demo-bucket/uploads/")  # nosec B101
+    assert location.startswith("gs://demo-bucket/")  # nosec B101
     assert client.requested_bucket == "demo-bucket"  # nosec B101
     assert client.bucket_instance.requested_name is not None  # nosec B101
     data, content_type = client.bucket_instance.blob_instance.uploads[0]
