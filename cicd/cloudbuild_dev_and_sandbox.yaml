@@ -13,7 +13,7 @@ steps:
 
         echo === Install dependencies for tests ===
         poetry install
-        
+
         echo === Running unit tests ===
         poetry run poetry run pytest -q --maxfail=1 --disable-warnings --cov=src/$(PKG) --cov-report term-missing --cov-fail-under=80 | tee coverage-report.txt
         if grep -q "FAIL Required test coverage" coverage-report.txt; then
