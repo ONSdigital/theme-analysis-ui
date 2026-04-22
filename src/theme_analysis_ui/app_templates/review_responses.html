@@ -1,0 +1,90 @@
+{% extends "core.html" %}
+{% from "components/button/_macro.njk" import onsButton %}
+{% from "components/checkboxes/_macro.njk" import onsCheckboxes %}
+
+{% set containerClasses = "ons-container--full-width" %}
+{% set page_title = "Review responses" %}
+
+{% block pageContent %}
+<div class="ons-page__container ons-container ons-u-pt-m ons-u-pb-l">
+    <main id="main-content" class="ons-grid ons-grid--column@xxs@s">
+        <div class="ons-grid__col ons-col-12 ons-col@l-8">
+
+            {% if errors %}
+                <div class="ons-u-mb-m">
+                    <h2 class="ons-u-fs-r--b ons-u-mb-xs">There is a problem</h2>
+                    <ul class="ons-list ons-u-mb-no">
+                        {% for error in errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            <h2 class="ons-u-mb-m">
+                The following rows may disclose information
+            </h2>
+
+            {% if flagged_rows %}
+                <div class="ons-table__container ons-u-mb-m">
+                    <table class="ons-table">
+                        <thead class="ons-table__head">
+                            <tr class="ons-table__row">
+                                <th class="ons-table__header" scope="col">Row</th>
+                                <th class="ons-table__header" scope="col">Response</th>
+                            </tr>
+                        </thead>
+                        <tbody class="ons-table__body">
+                            {% for row in flagged_rows %}
+                                <tr class="ons-table__row">
+                                    <td class="ons-table__cell">{{ row.row_number }}</td>
+                                    <td class="ons-table__cell">{{ row.response_text }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="ons-u-mb-m">No potentially disclosive rows were found.</p>
+            {% endif %}
+
+            <form method="post" action="{{ url_for('ui.review_responses') }}">
+                <div class="ons-u-mb-l">
+                    {{
+                        onsCheckboxes({
+                            "id": "ignore-disclosure-warning",
+                            "name": "ignore_disclosure_warning",
+                            "legend": "Disclosure acknowledgement",
+                            "legendClasses": "ons-u-vh",
+                            "checkboxes": [
+                                {
+                                    "id": "ignore-warning",
+                                    "label": {
+                                        "text": "These are ok to ignore"
+                                    },
+                                    "value": "true"
+                                }
+                            ]
+                        })
+                    }}
+                </div>
+
+                <div class="ons-btn-group">
+                    {{ onsButton({
+                        "text": "Cancel",
+                        "url": url_for('ui.cancel'),
+                        "variants": "secondary"
+                    }) }}
+
+                    {{ onsButton({
+                        "text": "Continue",
+                        "type": "submit",
+                        "id": "continue-button"
+                    }) }}
+                </div>
+            </form>
+
+        </div>
+    </main>
+</div>
+{% endblock %}

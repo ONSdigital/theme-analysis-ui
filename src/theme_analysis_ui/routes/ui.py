@@ -6,6 +6,7 @@ from datetime import datetime
 from http import HTTPStatus
 import json
 from pathlib import Path, PurePosixPath
+import tempfile
 from typing import Any, BinaryIO, cast
 
 from flask import (
@@ -19,6 +20,7 @@ from flask import (
 )
 from flask import Response as ResponseType
 from flask.typing import ResponseReturnValue
+from survey_assist_pii import validate_csv_file
 from werkzeug.security import check_password_hash
 import yaml
 
@@ -42,7 +44,11 @@ ALLOWED_REDIRECT_PREFIXES = ["/index", "/theme_meta", "/upload", "/confirm"]
 def enforce_login() -> ResponseReturnValue | None:
     """Ensure unauthenticated users are redirected to the sign-in page."""
 
-    if request.endpoint in {"ui.login", "ui.check_login", "static"}:
+    if request.endpoint in {
+        "ui.login",
+        "ui.check_login",
+        "static",
+    }:
         return None
     if session.get(SESSION_USER_KEY):
         return None
@@ -116,7 +122,21 @@ def handle_upload() -> ResponseReturnValue:
             ),
             HTTPStatus.BAD_REQUEST,
         )
-
+    try:
+        validation_result = _validate_uploaded_csv(upload)
+    except (ValueError, OSError) as exc:
+        return (
+            render_template(
+                "upload_theme_file.html",
+                page_title="Theme analysis uploads",
+                page_config=None,
+                meta_question=session.get("meta", {}).get("question", "the selected question"),
+                errors=[str(exc)],
+                upload_result=None,
+            ),
+            HTTPStatus.BAD_REQUEST,
+        )
+    upload.stream.seek(0)
     filename = upload.filename
     storage: StorageBackend = current_app.config["storage_backend"]
     stream = cast(BinaryIO, upload.stream)
@@ -125,27 +145,30 @@ def handle_upload() -> ResponseReturnValue:
         filename,
         upload.mimetype or "application/octet-stream",
     )
+    if validation_result["has_findings"]:
+        session["pending_upload"] = {
+            "filename": filename,
+            "csv_file": stored_location,
+        }
+        session["flagged_rows"] = validation_result["flagged_rows"]
+        session.modified = True
+        return redirect(url_for("ui.review_responses"))
+
     metadata_document = _build_theme_metadata_document(stored_location)
     metadata_location = _persist_theme_metadata(storage, stored_location, metadata_document)
 
     # Save the upload information
-    session["upload"] = {}
-    session["upload"]["csv_file"] = stored_location
-    session["upload"]["meta_file"] = metadata_location
+    session["upload"] = {
+        "filename": filename,
+        "csv_file": stored_location,
+        "meta_file": metadata_location,
+    }
+    session.pop("pending_upload", None)
+    session.pop("flagged_rows", None)
+
     session.modified = True  # Ensure session is saved even if only modified in-place
 
-    return render_template(
-        "upload_theme_file.html",
-        page_title="Theme analysis uploads",
-        page_config=None,
-        meta_question=session.get("meta", {}).get("question", "the selected question"),
-        errors=errors,
-        upload_result={
-            "filename": filename,
-            "location": stored_location,
-            "metadata_location": metadata_location,
-        },
-    )
+    return redirect(url_for("ui.upload_complete"))
 
 
 @ui_blueprint.get("/confirm")
@@ -315,6 +338,111 @@ def privacy() -> ResponseReturnValue:
     return render_template("privacy.html")
 
 
+@ui_blueprint.route("/review_responses", methods=["GET", "POST"])
+def review_responses() -> ResponseReturnValue:
+    flagged_rows = session.get("flagged_rows", [])
+    pending_upload = session.get("pending_upload")
+    errors: list[str] = []
+
+    if not pending_upload:
+        return redirect(url_for("ui.theme_meta"))
+
+    if request.method == "GET":
+        return render_template(
+            "review_responses.html",
+            page_title="Review responses",
+            flagged_rows=flagged_rows,
+            errors=errors,
+        )
+
+    ignore_warning = request.form.get("ignore_disclosure_warning")
+    if ignore_warning != "true":
+        return (
+            render_template(
+                "review_responses.html",
+                page_title="Review responses",
+                flagged_rows=flagged_rows,
+                errors=["Select 'These are ok to ignore' before continuing."],
+            ),
+            HTTPStatus.BAD_REQUEST,
+        )
+
+    storage: StorageBackend = current_app.config["storage_backend"]
+    stored_location = pending_upload["csv_file"]
+
+    metadata_document = _build_theme_metadata_document(stored_location)
+    metadata_location = _persist_theme_metadata(storage, stored_location, metadata_document)
+
+    session["upload"] = {
+        "filename": pending_upload["filename"],
+        "csv_file": stored_location,
+        "meta_file": metadata_location,
+    }
+    session.pop("pending_upload", None)
+    session.pop("flagged_rows", None)
+    session.modified = True
+
+    return redirect(url_for("ui.upload_complete"))
+
+
+@ui_blueprint.get("/cancel")
+def cancel() -> ResponseReturnValue:
+    pii_report_url = session.get("pii_report_url")
+
+    return render_template(
+        "cancel.html",
+        page_title="Upload cancelled",
+        pii_report_url=pii_report_url,
+    )
+
+
+@ui_blueprint.get("/upload_complete")
+def upload_complete() -> ResponseReturnValue:
+    upload_info = session.get("upload", {})
+
+    return render_template(
+        "upload.html",
+        page_title="Upload completed",
+        filename=upload_info.get("filename"),
+        location=upload_info.get("csv_file"),
+        metadata_location=upload_info.get("meta_file"),
+    )
+
+
+@ui_blueprint.post("/start_analysis")
+def start_analysis() -> ResponseReturnValue:
+    settings = current_app.config["settings"]
+    staging_bucket = settings.bucket_name
+
+    upload_info = session.get("upload", {})
+    csv_object = upload_info.get("csv_file")
+    metadata_object = upload_info.get("meta_file")
+    question = session.get("meta", {}).get("question", "No question provided")
+
+    output_prefix = f"outputs/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+    project_id, region, workflow_name, cr_job_name, cr_job_region = get_workflow_config()
+
+    execution_name = trigger_workflow(
+        project_id=project_id,
+        region=region,
+        workflow_name=workflow_name,
+        staging_bucket=staging_bucket,
+        csv_object=csv_object,
+        metadata_object=metadata_object,
+        question=question,
+        output_prefix=output_prefix,
+        job_name=cr_job_name,
+        job_region=cr_job_region,
+    )
+
+    return render_template(
+        "confirm.html",
+        page_title="Analysis started",
+        execution_name=execution_name,
+    )
+
+
 def _truncate(value: str | None, length: int = 5) -> str:
     """Truncate a string to a specified length, handling None values gracefully."""
     return (value or "")[:length]
@@ -405,3 +533,29 @@ def _store_metadata_in_gcs(
     blob = bucket.blob(metadata_blob_name)
     blob.upload_from_string(yaml_payload, content_type="application/x-yaml")
     return f"gs://{bucket_name}/{metadata_blob_name}"
+
+
+def _validate_uploaded_csv(upload) -> dict[str, Any]:
+    """Validate the uploaded CSV file for PII and return any flagged rows."""
+    filename = upload.filename or "upload.csv"
+    suffix = Path(filename).suffix or ".csv"
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        upload.save(tmp.name)
+        temp_path = Path(tmp.name)
+        try:
+            result = validate_csv_file(input_file=temp_path)
+            flagged_rows = [
+                {
+                    "row_number": report.row_number,
+                    "response_text": report.comment,
+                }
+                for report in result.reports
+            ]
+
+            return {
+                "has_findings": result.has_findings,
+                "flagged_rows": flagged_rows,
+            }
+        finally:
+            temp_path.unlink()
