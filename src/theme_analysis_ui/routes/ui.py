@@ -21,6 +21,7 @@ from flask import (
 from flask import Response as ResponseType
 from flask.typing import ResponseReturnValue
 from survey_assist_pii import validate_csv_file
+from werkzeug.datastructures import FileStorage
 from werkzeug.security import check_password_hash
 import yaml
 
@@ -43,7 +44,6 @@ ALLOWED_REDIRECT_PREFIXES = ["/index", "/theme_meta", "/upload", "/confirm"]
 @ui_blueprint.before_app_request
 def enforce_login() -> ResponseReturnValue | None:
     """Ensure unauthenticated users are redirected to the sign-in page."""
-
     if request.endpoint in {
         "ui.login",
         "ui.check_login",
@@ -356,7 +356,7 @@ def review_responses() -> ResponseReturnValue:
         )
 
     ignore_warning = request.form.get("ignore_disclosure_warning")
-    if ignore_warning != "true":
+    if not ignore_warning:
         return (
             render_template(
                 "review_responses.html",
@@ -535,7 +535,7 @@ def _store_metadata_in_gcs(
     return f"gs://{bucket_name}/{metadata_blob_name}"
 
 
-def _validate_uploaded_csv(upload) -> dict[str, Any]:
+def _validate_uploaded_csv(upload: FileStorage) -> dict[str, Any]:
     """Validate the uploaded CSV file for PII and return any flagged rows."""
     filename = upload.filename or "upload.csv"
     suffix = Path(filename).suffix or ".csv"
