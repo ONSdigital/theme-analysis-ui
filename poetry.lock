@@ -3629,8 +3629,10 @@ presidio-analyzer = ">=2.2.355,<3.0.0"
 presidio-anonymizer = ">=2.2.362,<3.0.0"
 
 [package.source]
-type = "directory"
-url = "../survey-assist-pii"
+type = "git"
+url = "ssh://git@github.com/ONSdigital/survey-assist-pii.git"
+reference = "HEAD"
+resolved_reference = "2d5ea4fdb6d1a72a0bc1233da3a3baf8c8dff62a"
 
 [[package]]
 name = "thinc"
@@ -4181,4 +4183,4 @@ dev = ["pytest", "setuptools"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "d2a1edd3ccf434ff599f893b0f8443ce97a8f86a69ccdb3910d33060720acbed"
+content-hash = "0fd079cf7d1474900d8a2ef6fcc542dc939135081666e1d50cea6f65f5fe43c1"
