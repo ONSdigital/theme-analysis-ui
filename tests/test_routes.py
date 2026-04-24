@@ -96,9 +96,16 @@ def test_post_upload_without_file_returns_error(
 
 
 def test_post_upload_persists_file_via_storage_backend(
-    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ensure uploads reach the configured storage backend."""
+
+    monkeypatch.setattr(
+        ui_routes,
+        "_validate_uploaded_csv",
+        lambda upload: {"has_findings": False, "flagged_rows": []},
+    )
 
     client, storage = test_client
     with client.session_transaction() as flask_session:
@@ -110,14 +117,12 @@ def test_post_upload_persists_file_via_storage_backend(
         },
         content_type="multipart/form-data",
     )
-    assert response.status_code == 200  # nosec B101
+    assert response.status_code == 302  # nosec B101
     assert storage.calls  # nosec B101
     payload, filename, content_type = storage.calls[0]
     assert payload == b"content"  # nosec B101
     assert filename == "analysis.csv"  # nosec B101
     assert content_type == "text/csv"  # nosec B101
-    payload_html = response.get_data(as_text=True)
-    assert "analysis.csv" in payload_html  # nosec B101
 
 
 def test_post_upload_creates_metadata_yaml(

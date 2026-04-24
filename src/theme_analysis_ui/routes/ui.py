@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 from http import HTTPStatus
+from io import BytesIO
 import json
 from pathlib import Path, PurePosixPath
 import tempfile
@@ -20,7 +22,8 @@ from flask import (
 )
 from flask import Response as ResponseType
 from flask.typing import ResponseReturnValue
-from survey_assist_pii import validate_csv_file
+from survey_assist_pii.reporting.json_report import build_json_report
+from survey_assist_pii.services.pii_service import validate_csv_file
 from werkzeug.datastructures import FileStorage
 from werkzeug.security import check_password_hash
 import yaml
@@ -146,12 +149,22 @@ def handle_upload() -> ResponseReturnValue:
         upload.mimetype or "application/octet-stream",
     )
     if validation_result["has_findings"]:
+        report_filename = f"{Path(filename).stem}_pii_report.json"
+
+        report_location = storage.store_file(
+            BytesIO(validation_result["report_bytes"]),
+            report_filename,
+            "application/json",
+        )
+
         session["pending_upload"] = {
             "filename": filename,
             "csv_file": stored_location,
         }
         session["flagged_rows"] = validation_result["flagged_rows"]
+        session["pii_report_location"] = report_location
         session.modified = True
+
         return redirect(url_for("ui.review_responses"))
 
     metadata_document = _build_theme_metadata_document(stored_location)
@@ -387,12 +400,14 @@ def review_responses() -> ResponseReturnValue:
 
 @ui_blueprint.get("/cancel")
 def cancel() -> ResponseReturnValue:
-    pii_report_url = session.get("pii_report_url")
+    pii_report_location = session.get("pii_report_location")
+    flagged_rows = session.get("flagged_rows", [])
 
     return render_template(
         "cancel.html",
         page_title="Upload cancelled",
-        pii_report_url=pii_report_url,
+        pii_report_location=pii_report_location,
+        flagged_rows=flagged_rows,
     )
 
 
@@ -543,19 +558,29 @@ def _validate_uploaded_csv(upload: FileStorage) -> dict[str, Any]:
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         upload.save(tmp.name)
         temp_path = Path(tmp.name)
-        try:
-            result = validate_csv_file(input_file=temp_path)
-            flagged_rows = [
-                {
-                    "row_number": report.row_number,
-                    "response_text": report.comment,
-                }
-                for report in result.reports
-            ]
 
-            return {
-                "has_findings": result.has_findings,
-                "flagged_rows": flagged_rows,
+    try:
+        result = validate_csv_file(
+            input_file=temp_path,
+            delimiter="|",
+        )
+
+        flagged_rows = [
+            {
+                "row_number": report.row_number,
+                "response_text": report.comment,
             }
-        finally:
-            temp_path.unlink()
+            for report in result.reports
+        ]
+
+        json_report = build_json_report(result)
+        report_json = json.dumps(asdict(json_report), indent=2)
+
+        return {
+            "has_findings": result.has_findings,
+            "flagged_rows": flagged_rows,
+            "report_bytes": report_json.encode("utf-8"),
+        }
+
+    finally:
+        temp_path.unlink(missing_ok=True)

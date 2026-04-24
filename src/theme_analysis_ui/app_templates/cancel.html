@@ -17,19 +17,23 @@
                 Cancelled due to potential sensitive information disclosure.
             </p>
 
-            <p class="ons-u-mb-l">
-                PII report is available here:
-            </p>
+            {% if pii_report_location %}
+                <p class="ons-u-mb-s">
+                    PII report is downloaded here:
+                </p>
 
-            {% if pii_report_url %}
                 <p class="ons-u-mb-l">
-                    <a href="{{ pii_report_url }}" class="ons-link">Download PII report</a>
+                    <code>{{ pii_report_location }}</code>
+                </p>
+            {% else %}
+                <p class="ons-u-mb-l">
+                    No PII report location is available.
                 </p>
             {% endif %}
 
             <div class="ons-btn-group">
                 {{ onsButton({
-                    "text": "Home",
+                    "text": "Return home",
                     "url": url_for('ui.index')
                 }) }}
             </div>
