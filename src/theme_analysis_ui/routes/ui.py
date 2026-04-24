@@ -395,7 +395,18 @@ def review_responses() -> ResponseReturnValue:
     session.pop("flagged_rows", None)
     session.modified = True
 
-    return redirect(url_for("ui.upload_complete"))
+    return render_template(
+        "upload_theme_file.html",
+        page_title="Theme analysis uploads",
+        page_config=None,
+        meta_question=session.get("meta", {}).get("question", "the selected question"),
+        errors=[],
+        upload_result={
+            "filename": pending_upload["filename"],
+            "location": stored_location,
+            "metadata_location": metadata_location,
+        },
+    )
 
 
 @ui_blueprint.get("/cancel")
@@ -408,19 +419,6 @@ def cancel() -> ResponseReturnValue:
         page_title="Upload cancelled",
         pii_report_location=pii_report_location,
         flagged_rows=flagged_rows,
-    )
-
-
-@ui_blueprint.get("/upload_complete")
-def upload_complete() -> ResponseReturnValue:
-    upload_info = session.get("upload", {})
-
-    return render_template(
-        "upload.html",
-        page_title="Upload completed",
-        filename=upload_info.get("filename"),
-        location=upload_info.get("csv_file"),
-        metadata_location=upload_info.get("meta_file"),
     )
 
 
