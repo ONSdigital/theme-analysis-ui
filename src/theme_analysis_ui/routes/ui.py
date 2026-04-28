@@ -19,6 +19,7 @@ from flask import (
 )
 from flask import Response as ResponseType
 from flask.typing import ResponseReturnValue
+import markdown
 from werkzeug.security import check_password_hash
 import yaml
 
@@ -313,6 +314,24 @@ def privacy() -> ResponseReturnValue:
     """Render the privacy and data protection page that adopts the ONS Design System."""
 
     return render_template("privacy.html")
+
+
+@ui_blueprint.get("/report")
+def report():
+    md = Path("example_reports/example_in_numbers.md").read_text(encoding="utf-8")
+    html = markdown.markdown(md, extensions=["tables", "fenced_code"])
+    # return render_template_string("""
+    # <html>
+    #   <body class="govuk-body">
+    #     {{ content|safe }}
+    #   </body>
+    # </html>
+    # """, content=html)
+    return render_template(
+        "example_report.html",
+        page_title="Example report",
+        html_report=html,
+    )
 
 
 def _truncate(value: str | None, length: int = 5) -> str:
