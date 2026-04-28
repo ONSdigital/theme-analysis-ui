@@ -117,7 +117,7 @@ def test_post_upload_persists_file_via_storage_backend(
         },
         content_type="multipart/form-data",
     )
-    assert response.status_code == 302  # nosec B101
+    assert response.status_code == 200  # nosec B101
     assert storage.calls  # nosec B101
     payload, filename, content_type = storage.calls[0]
     assert payload == b"content"  # nosec B101
@@ -126,14 +126,22 @@ def test_post_upload_persists_file_via_storage_backend(
 
 
 def test_post_upload_creates_metadata_yaml(
-    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ensure a YAML sidecar file is written with the expected structure."""
+
+    monkeypatch.setattr(
+        ui_routes,
+        "_validate_uploaded_csv",
+        lambda upload: {"has_findings": False, "flagged_rows": [], "report_bytes": b"{}"},
+    )
 
     client, storage = test_client
     with client.session_transaction() as flask_session:
         flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
         flask_session["meta"] = {"question": "How satisfied are you?"}
+
     response = client.post(
         "/upload",
         data={
@@ -141,6 +149,7 @@ def test_post_upload_creates_metadata_yaml(
         },
         content_type="multipart/form-data",
     )
+
     assert response.status_code == 200  # nosec B101
     stored_files = list(storage.root.iterdir())
     csv_files = [path for path in stored_files if path.suffix == ".csv"]
@@ -167,9 +176,16 @@ def test_post_upload_creates_metadata_yaml(
 
 
 def test_post_upload_uses_session_metadata_values(
-    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ensure session-provided metadata overrides the defaults."""
+
+    monkeypatch.setattr(
+        ui_routes,
+        "_validate_uploaded_csv",
+        lambda upload: {"has_findings": False, "flagged_rows": [], "report_bytes": b"{}"},
+    )
 
     client, storage = test_client
     custom_meta = {
@@ -334,3 +350,156 @@ def test_credentials_match_supports_password_hashes() -> None:
     users = {"person@example.com": generate_password_hash(password)}
     assert ui_routes._credentials_match(users, "person@example.com", password)  # nosec B101
     assert not ui_routes._credentials_match(users, "person@example.com", "wrong")  # nosec B101
+
+
+def test_cancel_renders_pii_report_location(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+) -> None:
+    """Ensure cancel page shows stored PII report location."""
+
+    client, _ = test_client
+    with client.session_transaction() as flask_session:
+        flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
+        flask_session["pii_report_location"] = "/tmp/responses_pii_report.json"
+
+    response = client.get("/cancel")
+
+    assert response.status_code == 200  # nosec B101
+    page = response.get_data(as_text=True)
+    assert "template=cancel.html" in page  # nosec B101
+    assert "/tmp/responses_pii_report.json" in page  # nosec B101
+
+
+def test_review_responses_get_renders_flagged_rows(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+) -> None:
+    """Ensure review page renders flagged rows from session."""
+
+    client, _ = test_client
+    with client.session_transaction() as flask_session:
+        flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
+        flask_session["pending_upload"] = {
+            "filename": "responses.csv",
+            "csv_file": "/tmp/responses.csv",
+        }
+        flask_session["flagged_rows"] = [
+            {"row_number": 2, "response_text": "Email me at test@example.com"}
+        ]
+
+    response = client.get("/review_responses")
+
+    assert response.status_code == 200  # nosec B101
+    page = response.get_data(as_text=True)
+    assert "template=review_responses.html" in page  # nosec B101
+    assert "Email me at test@example.com" in page  # nosec B101
+
+
+def test_post_upload_with_findings_redirects_to_review_responses(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure uploads with PII findings are sent to the review step."""
+
+    monkeypatch.setattr(
+        ui_routes,
+        "_validate_uploaded_csv",
+        lambda upload: {
+            "has_findings": True,
+            "flagged_rows": [
+                {"row_number": 2, "response_text": "Email me at test@example.com"},
+            ],
+            "report_bytes": b'{"summary": {}}',
+        },
+    )
+
+    client, storage = test_client
+    with client.session_transaction() as flask_session:
+        flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
+
+    response = client.post(
+        "/upload",
+        data={"file": (BytesIO(b"content"), "responses.csv")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 302  # nosec B101
+    assert response.headers["Location"].endswith("/review_responses")  # nosec B101
+
+    # Original CSV + PII report should both be stored
+    assert len(storage.calls) == 2  # nosec B101
+    assert storage.calls[0][1] == "responses.csv"  # nosec B101
+    assert storage.calls[1][1] == "responses_pii_report.json"  # nosec B101
+    assert storage.calls[1][2] == "application/json"  # nosec B101
+
+    with client.session_transaction() as flask_session:
+        assert flask_session["pending_upload"]["filename"] == "responses.csv"  # nosec B101
+        assert "csv_file" in flask_session["pending_upload"]  # nosec B101
+        assert flask_session["flagged_rows"] == [
+            {"row_number": 2, "response_text": "Email me at test@example.com"}
+        ]  # nosec B101
+        assert "pii_report_location" in flask_session  # nosec B101
+
+
+def test_review_responses_post_with_acknowledgement_completes_upload(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+) -> None:
+    """Ensure accepted flagged upload creates metadata and shows upload success."""
+
+    client, storage = test_client
+
+    csv_path = storage.root / "responses.csv"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    csv_path.write_text("content", encoding="utf-8")
+
+    with client.session_transaction() as flask_session:
+        flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
+        flask_session["meta"] = {"question": "How satisfied are you?"}
+        flask_session["pending_upload"] = {
+            "filename": "responses.csv",
+            "csv_file": str(csv_path),
+        }
+        flask_session["flagged_rows"] = [
+            {"row_number": 2, "response_text": "Email me at test@example.com"}
+        ]
+
+    response = client.post(
+        "/review_responses",
+        data={"ignore_disclosure_warning": "true"},
+    )
+
+    assert response.status_code == 200  # nosec B101
+    page = response.get_data(as_text=True)
+    assert "template=upload_theme_file.html" in page  # nosec B101
+    assert "responses.csv" in page  # nosec B101
+
+    yml_path = csv_path.with_suffix(".yml")
+    assert yml_path.exists()  # nosec B101
+
+    with client.session_transaction() as flask_session:
+        assert "upload" in flask_session  # nosec B101
+        assert "pending_upload" not in flask_session  # nosec B101
+        assert "flagged_rows" not in flask_session  # nosec B101
+
+
+def test_review_responses_post_without_acknowledgement_returns_error(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+) -> None:
+    """Ensure user must acknowledge disclosure warning before continuing."""
+
+    client, _ = test_client
+    with client.session_transaction() as flask_session:
+        flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
+        flask_session["pending_upload"] = {
+            "filename": "responses.csv",
+            "csv_file": "/tmp/responses.csv",
+        }
+        flask_session["flagged_rows"] = [
+            {"row_number": 2, "response_text": "Email me at test@example.com"}
+        ]
+
+    response = client.post("/review_responses", data={})
+
+    assert response.status_code == 400  # nosec B101
+    page = response.get_data(as_text=True)
+    assert "template=review_responses.html" in page  # nosec B101
+    assert "Select 'These are ok to ignore' before continuing." in page  # nosec B101

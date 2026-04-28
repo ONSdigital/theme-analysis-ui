@@ -181,7 +181,18 @@ def handle_upload() -> ResponseReturnValue:
 
     session.modified = True  # Ensure session is saved even if only modified in-place
 
-    return redirect(url_for("ui.upload_complete"))
+    return render_template(
+        "upload_theme_file.html",
+        page_title="Theme analysis uploads",
+        page_config=None,
+        meta_question=session.get("meta", {}).get("question", "the selected question"),
+        errors=errors,
+        upload_result={
+            "filename": filename,
+            "location": stored_location,
+            "metadata_location": metadata_location,
+        },
+    )
 
 
 @ui_blueprint.get("/confirm")
