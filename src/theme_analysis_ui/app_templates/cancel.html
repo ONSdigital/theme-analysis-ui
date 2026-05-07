@@ -1,0 +1,44 @@
+{% extends "core.html" %}
+{% from "components/button/_macro.njk" import onsButton %}
+
+{% set containerClasses = "ons-container--full-width" %}
+{% set page_title = "Upload cancelled" %}
+
+{% block pageContent %}
+<div class="ons-page__container ons-container ons-u-pt-m ons-u-pb-l">
+    <main id="main-content" class="ons-grid ons-grid--column@xxs@s">
+        <div class="ons-grid__col ons-col-12 ons-col@l-8">
+
+            <h1 class="ons-u-fs-l ons-u-mb-m">
+                Upload cancelled
+            </h1>
+
+            <p class="ons-u-mb-m">
+                Cancelled due to potential sensitive information disclosure.
+            </p>
+
+            {% if pii_report_location %}
+                <p class="ons-u-mb-s">
+                    PII report is downloaded here:
+                </p>
+
+                <p class="ons-u-mb-l">
+                    <code>{{ pii_report_location }}</code>
+                </p>
+            {% else %}
+                <p class="ons-u-mb-l">
+                    No PII report location is available.
+                </p>
+            {% endif %}
+
+            <div class="ons-btn-group">
+                {{ onsButton({
+                    "text": "Return home",
+                    "url": url_for('ui.index')
+                }) }}
+            </div>
+
+        </div>
+    </main>
+</div>
+{% endblock %}
