@@ -6,13 +6,18 @@
     "navigation": {
         "id": "main-navigation",
         "itemsList": [
-        {"url": url_for("ui.index"),
-        "title": "Home"},
+            {
+                "url": url_for("ui.index"),
+                "title": "Home"
+            },
+            {
+                "url": url_for("ui.reports"),
+                "title": "View Reports"
+            }
         ],
-        "currentPath": current_path
-        }
+        "currentPath": request.path
     }
-%}
+} %}
 {% set pageConfig = {
     "meta": {
         "canonicalUrl": "/",

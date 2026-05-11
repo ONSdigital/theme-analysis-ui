@@ -1,5 +1,5 @@
 {% extends "core.html" %}
-{% set page_title = "Example report" %}
+{% set page_title = page_title or "Report" %}
 
 {% block pageContent %}
 <div class="ons-page__container ons-container ons-u-pt-m ons-u-pb-l">
@@ -7,7 +7,12 @@
         <div class="ons-grid__col ons-col-12 ons-col@l-10">
 
             {% block page_body %}
-            <h1 class="ons-u-fs-xxl ons-u-mb-m">Example report</h1>
+            <h1 class="ons-u-fs-xxl ons-u-mb-m">{{ page_title }}</h1>
+
+            <p class="ons-u-mb-m">
+                <a href="{{ url_for('ui.reports') }}">Back to reports</a>
+            </p>
+
             {{ html_report | safe }}
             {% endblock %}
         </div>

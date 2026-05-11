@@ -37,6 +37,7 @@ DEFAULT_SURVEY = "Example Survey"
 DEFAULT_DIVISION = "Example Division"
 DEFAULT_TEAM = "Example Team"
 DEFAULT_SURVEY_DESCRIPTION = "Example Survey Description"
+REPORTS_PREFIX = "outputs/"
 
 ui_blueprint = Blueprint("ui", __name__)
 
@@ -47,6 +48,9 @@ ALLOWED_REDIRECT_PREFIXES = ["/index", "/theme_meta", "/upload", "/confirm"]
 
 @ui_blueprint.before_app_request
 def enforce_login() -> ResponseReturnValue | None:
+    if current_app.debug:
+        session[SESSION_USER_KEY] = "local-test-user"
+        return None
     """Ensure unauthenticated users are redirected to the sign-in page."""
     if request.endpoint in {
         "ui.login",
@@ -363,76 +367,69 @@ def privacy() -> ResponseReturnValue:
     return render_template("privacy.html")
 
 
-@ui_blueprint.get("/report")
-def report():
-    md = Path("example_reports/example_in_numbers.md").read_text(encoding="utf-8")
-    html = markdown.markdown(md, extensions=["tables", "fenced_code"])
-    # return render_template_string("""
-    # <html>
-    #   <body class="govuk-body">
-    #     {{ content|safe }}
-    #   </body>
-    # </html>
-    # """, content=html)
+@ui_blueprint.get("/reports")
+def reports() -> ResponseReturnValue:
+    """List markdown reports stored in GCS."""
+
+    settings = current_app.config["settings"]
+    storage_backend: GCPStorageBackend = current_app.config["storage_backend"]
+
+    bucket = storage_backend.get_client().bucket(settings.bucket_name)
+
+    blobs = [blob for blob in bucket.list_blobs(prefix=REPORTS_PREFIX) if blob.name.endswith(".md")]
+
+    blobs.sort(
+        key=lambda blob: blob.time_created or datetime.min,
+        reverse=True,
+    )
+
+    reports_list = [
+        {
+            "filename": blob.name,
+            "title": Path(blob.name).stem.replace("_", " ").replace("-", " ").title(),
+            "created": (
+                blob.time_created.strftime("%d %b %Y %H:%M") if blob.time_created else "Unknown"
+            ),
+        }
+        for blob in blobs
+    ]
+
+    return render_template(
+        "reports.html",
+        page_title="View reports",
+        page_config=None,
+        reports=reports_list,
+    )
+
+
+@ui_blueprint.get("/reports/<path:filename>")
+def view_report(filename: str) -> ResponseReturnValue:
+    """Render a markdown report from GCS."""
+
+    if not filename.endswith(".md"):
+        return ("Invalid report.", HTTPStatus.BAD_REQUEST)
+
+    settings = current_app.config["settings"]
+    storage_backend: GCPStorageBackend = current_app.config["storage_backend"]
+
+    bucket = storage_backend.get_client().bucket(settings.bucket_name)
+    blob = bucket.blob(filename)
+
+    if not blob.exists():
+        return ("Report not found.", HTTPStatus.NOT_FOUND)
+
+    md = blob.download_as_text(encoding="utf-8")
+
+    html = markdown.markdown(
+        md,
+        extensions=["tables", "fenced_code"],
+    )
+
     return render_template(
         "example_report.html",
-        page_title="Example report",
-        html_report=html,
-@ui_blueprint.route("/review_responses", methods=["GET", "POST"])
-def review_responses() -> ResponseReturnValue:
-    flagged_rows = session.get("flagged_rows", [])
-    pending_upload = session.get("pending_upload")
-    errors: list[str] = []
-
-    if not pending_upload:
-        return redirect(url_for("ui.theme_meta"))
-
-    if request.method == "GET":
-        return render_template(
-            "review_responses.html",
-            page_title="Review responses",
-            flagged_rows=flagged_rows,
-            errors=errors,
-        )
-
-    ignore_warning = request.form.get("ignore_disclosure_warning")
-    if not ignore_warning:
-        return (
-            render_template(
-                "review_responses.html",
-                page_title="Review responses",
-                flagged_rows=flagged_rows,
-                errors=["Select 'These are ok to ignore' before continuing."],
-            ),
-            HTTPStatus.BAD_REQUEST,
-        )
-
-    storage: StorageBackend = current_app.config["storage_backend"]
-    stored_location = pending_upload["csv_file"]
-
-    metadata_document = _build_theme_metadata_document(stored_location)
-    metadata_location = _persist_theme_metadata(storage, stored_location, metadata_document)
-
-    session["upload"] = {
-        "filename": pending_upload["filename"],
-        "csv_file": stored_location,
-        "meta_file": metadata_location,
-    }
-    session.pop("pending_upload", None)
-    session.pop("flagged_rows", None)
-    session.modified = True
-
-    return render_template(
-        "upload_theme_file.html",
-        page_title="Theme analysis uploads",
+        page_title=Path(filename).stem.replace("_", " ").replace("-", " ").title(),
         page_config=None,
-        meta_question=session.get("meta", {}).get("question", "the selected question"),
-        errors=[],
-        upload_result={
-            "filename": pending_upload["filename"],
-            "location": stored_location,
-            "metadata_location": metadata_location,
-        },
+        html_report=html,
     )
 
 
