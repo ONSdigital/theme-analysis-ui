@@ -9,16 +9,35 @@
             <h1 class="ons-u-fs-xxl ons-u-mb-m">View reports</h1>
 
             {% if reports %}
-                <ul class="ons-list">
-                    {% for report in reports %}
-                        <li class="ons-list__item ons-u-mb-s">
-                            <a href="{{ url_for('ui.view_report', filename=report.filename) }}">
-                                {{ report.title }}
-                            </a>
-                            <span class="ons-u-fs-s"> — created {{ report.created }}</span>
-                        </li>
-                    {% endfor %}
-                </ul>
+                <p class="ons-u-mb-m">
+                    Select a report to view it in the browser.
+                </p>
+
+                <table class="ons-table">
+                    <caption class="ons-table__caption ons-u-vh">
+                        Available markdown reports
+                    </caption>
+                    <thead class="ons-table__head">
+                        <tr class="ons-table__row">
+                            <th scope="col" class="ons-table__header">Report name</th>
+                            <th scope="col" class="ons-table__header">Date created</th>
+                            <th scope="col" class="ons-table__header">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="ons-table__body">
+                        {% for report in reports %}
+                            <tr class="ons-table__row">
+                                <td class="ons-table__cell">{{ report.title }}</td>
+                                <td class="ons-table__cell">{{ report.created }}</td>
+                                <td class="ons-table__cell">
+                                    <a href="{{ url_for('ui.view_report', filename=report.filename) }}">
+                                        View report
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             {% else %}
                 <p>No reports found.</p>
             {% endif %}

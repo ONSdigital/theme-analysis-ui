@@ -22,6 +22,7 @@ from flask import (
 )
 from flask import Response as ResponseType
 from flask.typing import ResponseReturnValue
+from google.cloud import storage
 import markdown
 from survey_assist_pii.reporting.json_report import build_json_report
 from survey_assist_pii.services.pii_service import validate_csv_file
@@ -37,7 +38,6 @@ DEFAULT_SURVEY = "Example Survey"
 DEFAULT_DIVISION = "Example Division"
 DEFAULT_TEAM = "Example Team"
 DEFAULT_SURVEY_DESCRIPTION = "Example Survey Description"
-REPORTS_PREFIX = "outputs/"
 
 ui_blueprint = Blueprint("ui", __name__)
 
@@ -372,11 +372,10 @@ def reports() -> ResponseReturnValue:
     """List markdown reports stored in GCS."""
 
     settings = current_app.config["settings"]
-    storage_backend: GCPStorageBackend = current_app.config["storage_backend"]
+    client = storage.Client()
+    bucket = client.bucket(settings.bucket_name)
 
-    bucket = storage_backend.get_client().bucket(settings.bucket_name)
-
-    blobs = [blob for blob in bucket.list_blobs(prefix=REPORTS_PREFIX) if blob.name.endswith(".md")]
+    blobs = [blob for blob in bucket.list_blobs() if blob.name.endswith(".md")]
 
     blobs.sort(
         key=lambda blob: blob.time_created or datetime.min,
@@ -410,20 +409,16 @@ def view_report(filename: str) -> ResponseReturnValue:
         return ("Invalid report.", HTTPStatus.BAD_REQUEST)
 
     settings = current_app.config["settings"]
-    storage_backend: GCPStorageBackend = current_app.config["storage_backend"]
+    client = storage.Client()
+    bucket = client.bucket(settings.bucket_name)
 
-    bucket = storage_backend.get_client().bucket(settings.bucket_name)
     blob = bucket.blob(filename)
 
     if not blob.exists():
         return ("Report not found.", HTTPStatus.NOT_FOUND)
 
     md = blob.download_as_text(encoding="utf-8")
-
-    html = markdown.markdown(
-        md,
-        extensions=["tables", "fenced_code"],
-    )
+    html = markdown.markdown(md, extensions=["tables", "fenced_code"])
 
     return render_template(
         "example_report.html",
