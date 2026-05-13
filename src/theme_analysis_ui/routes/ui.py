@@ -425,6 +425,64 @@ def view_report(filename: str) -> ResponseReturnValue:
     )
 
 
+@ui_blueprint.route("/review_responses", methods=["GET", "POST"])
+def review_responses() -> ResponseReturnValue:
+    flagged_rows = session.get("flagged_rows", [])
+    pending_upload = session.get("pending_upload")
+    errors: list[str] = []
+
+    if not pending_upload:
+        return redirect(url_for("ui.theme_meta"))
+
+    if request.method == "GET":
+        return render_template(
+            "review_responses.html",
+            page_title="Review responses",
+            flagged_rows=flagged_rows,
+            errors=errors,
+        )
+
+    ignore_warning = request.form.get("ignore_disclosure_warning")
+    if not ignore_warning:
+        return (
+            render_template(
+                "review_responses.html",
+                page_title="Review responses",
+                flagged_rows=flagged_rows,
+                errors=["Select 'These are ok to ignore' before continuing."],
+            ),
+            HTTPStatus.BAD_REQUEST,
+        )
+
+    storage: StorageBackend = current_app.config["storage_backend"]
+    stored_location = pending_upload["csv_file"]
+
+    metadata_document = _build_theme_metadata_document(stored_location)
+    metadata_location = _persist_theme_metadata(storage, stored_location, metadata_document)
+
+    session["upload"] = {
+        "filename": pending_upload["filename"],
+        "csv_file": stored_location,
+        "meta_file": metadata_location,
+    }
+    session.pop("pending_upload", None)
+    session.pop("flagged_rows", None)
+    session.modified = True
+
+    return render_template(
+        "upload_theme_file.html",
+        page_title="Theme analysis uploads",
+        page_config=None,
+        meta_question=session.get("meta", {}).get("question", "the selected question"),
+        errors=[],
+        upload_result={
+            "filename": pending_upload["filename"],
+            "location": stored_location,
+            "metadata_location": metadata_location,
+        },
+    )
+
+
 @ui_blueprint.get("/cancel")
 def cancel() -> ResponseReturnValue:
     pii_report_location = session.get("pii_report_location")
