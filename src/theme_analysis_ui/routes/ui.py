@@ -48,9 +48,6 @@ ALLOWED_REDIRECT_PREFIXES = ["/index", "/theme_meta", "/upload", "/confirm"]
 
 @ui_blueprint.before_app_request
 def enforce_login() -> ResponseReturnValue | None:
-    if current_app.debug:
-        session[SESSION_USER_KEY] = "local-test-user"
-        return None
     """Ensure unauthenticated users are redirected to the sign-in page."""
     if request.endpoint in {
         "ui.login",
