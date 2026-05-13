@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from io import BytesIO
 import json
 from pathlib import Path
@@ -503,3 +504,105 @@ def test_review_responses_post_without_acknowledgement_returns_error(
     page = response.get_data(as_text=True)
     assert "template=review_responses.html" in page  # nosec B101
     assert "Select 'These are ok to ignore' before continuing." in page  # nosec B101
+
+
+def test_reports_requires_login(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+) -> None:
+    client, _ = test_client
+
+    response = client.get("/reports")
+
+    assert response.status_code == 302  # nosec B101
+    assert response.headers["Location"].endswith("/login")
+
+
+def test_view_report_rejects_non_markdown_filename(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+) -> None:
+    client, _ = test_client
+
+    with client.session_transaction() as flask_session:
+        flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
+
+    response = client.get("/reports/report.txt")
+
+    assert response.status_code == 400  # nosec B101
+    assert response.get_data(as_text=True) == "Invalid report."  # nosec B101
+
+
+def test_view_report_renders_markdown_report(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _ = test_client
+
+    with client.session_transaction() as flask_session:
+        flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
+
+    class FakeBlob:
+        def exists(self) -> bool:
+            return True
+
+        def download_as_text(self, encoding: str = "utf-8") -> str:
+            return "# Example Report\n\n| Theme | Count |\n|---|---:|\n| Pay | 3 |"
+
+    class FakeBucket:
+        def blob(self, filename: str) -> FakeBlob:
+            assert filename == "outputs/example_report.md"  # nosec B101
+            return FakeBlob()
+
+    class FakeClient:
+        def bucket(self, _: str) -> FakeBucket:
+            return FakeBucket()
+
+    monkeypatch.setattr(ui_routes.storage, "Client", lambda: FakeClient())
+
+    response = client.get("/reports/outputs/example_report.md")
+
+    assert response.status_code == 200  # nosec B101
+    page = response.get_data(as_text=True)
+    assert "template=example_report.html" in page  # nosec B101
+    assert "Example Report" in page  # nosec B101
+    assert "<h1>Example Report</h1>" in page  # nosec B101
+    assert "<table>" in page  # nosec B101
+    assert "Pay" in page  # nosec B101
+
+
+def test_reports_lists_markdown_reports_sorted_newest_first(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _ = test_client
+
+    with client.session_transaction() as flask_session:
+        flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
+
+    class FakeBlob:
+        def __init__(self, name: str, created: datetime | None) -> None:
+            self.name = name
+            self.time_created = created
+
+    class FakeBucket:
+        def list_blobs(self) -> list[FakeBlob]:
+            return [
+                FakeBlob("outputs/old_report.md", datetime(2026, 1, 1, 10, 0)),
+                FakeBlob("outputs/new_report.md", datetime(2026, 1, 2, 10, 0)),
+                FakeBlob("outputs/not_a_report.txt", datetime(2026, 1, 3, 10, 0)),
+            ]
+
+    class FakeClient:
+        def bucket(self, _: str) -> FakeBucket:
+            return FakeBucket()
+
+    monkeypatch.setattr(ui_routes.storage, "Client", lambda: FakeClient())
+
+    response = client.get("/reports")
+
+    assert response.status_code == 200  # nosec B101
+    page = response.get_data(as_text=True)
+    assert "template=reports.html" in page  # nosec B101
+    assert "outputs/new_report.md" in page  # nosec B101
+    assert "outputs/old_report.md" in page  # nosec B101
+    assert "not_a_report.txt" not in page  # nosec B101
+    assert page.index("outputs/new_report.md") < page.index("outputs/old_report.md")  # nosec B101
