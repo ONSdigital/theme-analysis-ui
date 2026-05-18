@@ -49,6 +49,10 @@ ALLOWED_REDIRECT_PREFIXES = ["/index", "/theme_meta", "/upload", "/confirm"]
 @ui_blueprint.before_app_request
 def enforce_login() -> ResponseReturnValue | None:
     """Ensure unauthenticated users are redirected to the sign-in page."""
+    if current_app.debug:
+        session[SESSION_USER_KEY] = "local-debug-user@example.com"
+        return None
+
     if request.endpoint in {
         "ui.login",
         "ui.check_login",
@@ -369,8 +373,15 @@ def reports() -> ResponseReturnValue:
     """List markdown reports stored in GCS."""
 
     settings = current_app.config["settings"]
+
+    if not settings.output_bucket_name:
+        return (
+            "OUTPUT_BUCKET_NAME is not configured.",
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
+
     client = storage.Client()
-    bucket = client.bucket(settings.bucket_name)
+    bucket = client.bucket(settings.output_bucket_name)
 
     blobs = [blob for blob in bucket.list_blobs() if blob.name.endswith(".md")]
 

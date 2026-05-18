@@ -60,6 +60,7 @@ def test_client(tmp_path: Path) -> tuple[FlaskClient, RecordingLocalStorageBacke
         file_store="LOCAL",
         upload_dir=tmp_path,
         bucket_name=None,
+        output_bucket_name=None,
         secret_key=TEST_APP_KEY,  # nosec B105
     )
     storage = RecordingLocalStorageBackend(root=tmp_path / "uploads")
@@ -336,6 +337,7 @@ def test_load_registered_users_reads_gcp_list_payload(
         file_store=settings.file_store,
         upload_dir=settings.upload_dir,
         bucket_name="bucket",
+        output_bucket_name="test-output-bucket",
         secret_key=settings.secret_key,
     )
 
@@ -575,6 +577,16 @@ def test_reports_lists_markdown_reports_sorted_newest_first(
 ) -> None:
     client, _ = test_client
 
+    settings = client.application.config["settings"]
+
+    client.application.config["settings"] = Settings(
+        environment=settings.environment,
+        file_store=settings.file_store,
+        upload_dir=settings.upload_dir,
+        bucket_name=settings.bucket_name,
+        output_bucket_name="test-output-bucket",
+        secret_key=settings.secret_key,
+    )
     with client.session_transaction() as flask_session:
         flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
 
@@ -592,7 +604,8 @@ def test_reports_lists_markdown_reports_sorted_newest_first(
             ]
 
     class FakeClient:
-        def bucket(self, _: str) -> FakeBucket:
+        def bucket(self, bucket_name: str) -> FakeBucket:
+            assert bucket_name == "test-output-bucket"  # nosec B101
             return FakeBucket()
 
     monkeypatch.setattr(ui_routes.storage, "Client", lambda: FakeClient())

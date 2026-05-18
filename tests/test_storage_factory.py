@@ -58,6 +58,7 @@ def test_factory_returns_local_backend(tmp_path: Path) -> None:
         file_store="LOCAL",
         upload_dir=tmp_path,
         bucket_name=None,
+        output_bucket_name=None,
         secret_key=TEST_APP_KEY,  # nosec B105
     )
     backend = build_storage_backend(settings)
@@ -72,6 +73,7 @@ def test_factory_returns_gcp_backend(monkeypatch: MonkeyPatch, tmp_path: Path) -
         file_store="GCP",
         upload_dir=tmp_path,
         bucket_name="demo-bucket",
+        output_bucket_name="test-output-bucket",
         secret_key=TEST_APP_KEY,  # nosec B105
     )
     sentinel = object()
@@ -84,6 +86,7 @@ def test_factory_returns_gcp_backend(monkeypatch: MonkeyPatch, tmp_path: Path) -
         "theme_analysis_ui.storage.factory.GCPStorageBackend",
         fake_backend,
     )
+
     backend = build_storage_backend(settings)
     assert backend is sentinel  # nosec B101
 

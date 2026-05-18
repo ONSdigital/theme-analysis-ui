@@ -24,6 +24,7 @@ class Settings:
     file_store: FileStore
     upload_dir: Path
     bucket_name: str | None
+    output_bucket_name: str | None
     secret_key: str
     ons_stylesheet_url: str = ONS_DESIGN_SYSTEM_STYLESHEET
 
@@ -42,6 +43,10 @@ class Settings:
         }
         if self.bucket_name:
             data["bucket_name"] = self.bucket_name
+
+        if self.output_bucket_name:
+            data["output_bucket_name"] = self.output_bucket_name
+
         return data
 
     def ensure_local_target(self) -> None:
@@ -68,6 +73,7 @@ def load_settings() -> Settings:
         raise ValueError("FILE_STORE must be either 'LOCAL' or 'GCP'.")
     upload_dir = Path(os.getenv("UPLOAD_DIR", "uploads")).expanduser().resolve()
     bucket_name = os.getenv("BUCKET_NAME")
+    output_bucket_name = os.getenv("OUTPUT_BUCKET_NAME")
     secret_key = os.getenv("FLASK_SECRET_KEY", "theme-analysis-ui-dev-secret")
 
     file_store = cast(FileStore, raw_file_store)
@@ -77,6 +83,7 @@ def load_settings() -> Settings:
         upload_dir=upload_dir,
         bucket_name=bucket_name,
         secret_key=secret_key,
+        output_bucket_name=output_bucket_name,
     )
     if settings.file_store == "GCP" and not settings.bucket_name:
         raise ValueError("BUCKET_NAME is required when FILE_STORE=GCP.")
