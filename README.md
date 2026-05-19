@@ -72,6 +72,8 @@ The following environment variables can be used to define UI behaviour.
 
 **BUCKET_NAME** - the name of the GCP bucket for staging uploaded files.  Only required when FILE_STORE is set as 'GCP'
 
+**OUTPUT_BUCKET_NAME** - the name of the GCP bucket containing generated analysis reports and workflow outputs. Used by the reports UI to list and render markdown reports. Required for the 'View Reports' feature to list the generated reports.
+
 **UPLOAD_DIR** - defaults to 'uploads' when running in a local filestore
 
 **FLASK_SECRET_KEY** - must be a secure key in deployment
