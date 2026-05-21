@@ -401,6 +401,11 @@ def reports() -> ResponseReturnValue:
         for blob in blobs
     ]
 
+    # Log the report files found in the bucket for debugging purposes
+    print(f"Found {len(reports_list)} report(s) in bucket '{settings.output_bucket_name}':")
+    for report in reports_list:
+        print(f" - {report['filename']} (created: {report['created']})")
+
     return render_template(
         "reports.html",
         page_title="View reports",
@@ -413,13 +418,17 @@ def reports() -> ResponseReturnValue:
 def view_report(filename: str) -> ResponseReturnValue:
     """Render a markdown report from GCS."""
 
+    # Log the requested filename for debugging purposes
+    print(f"Requested report: {filename}")
     if not filename.endswith(".md"):
         return ("Invalid report.", HTTPStatus.BAD_REQUEST)
 
     settings = current_app.config["settings"]
     client = storage.Client()
-    bucket = client.bucket(settings.bucket_name)
+    bucket = client.bucket(settings.output_bucket_name)
 
+    # Log the attempt to access the blob for debugging purposes
+    print(f"Attempting to access blob '{filename}' in bucket '{settings.output_bucket_name}'")
     blob = bucket.blob(filename)
 
     if not blob.exists():
