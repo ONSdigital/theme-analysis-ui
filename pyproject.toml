@@ -15,6 +15,7 @@ pyyaml = "^6.0.3"
 google-cloud-workflows = "^1.21.0"
 more-itertools = "^11.0.1"
 survey-assist-pii = { git = "https://github.com/ONSdigital/survey-assist-pii.git" }
+markdown = "^3.10.2"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"
