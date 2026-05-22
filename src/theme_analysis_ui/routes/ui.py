@@ -22,6 +22,8 @@ from flask import (
 )
 from flask import Response as ResponseType
 from flask.typing import ResponseReturnValue
+from google.cloud import storage
+import markdown
 from survey_assist_pii.reporting.json_report import build_json_report
 from survey_assist_pii.services.pii_service import validate_csv_file
 from werkzeug.datastructures import FileStorage
@@ -360,6 +362,83 @@ def privacy() -> ResponseReturnValue:
     """Render the privacy and data protection page that adopts the ONS Design System."""
 
     return render_template("privacy.html")
+
+
+@ui_blueprint.get("/reports")
+def reports() -> ResponseReturnValue:
+    """List markdown reports stored in GCS."""
+
+    settings = current_app.config["settings"]
+
+    if not settings.output_bucket_name:
+        return (
+            "OUTPUT_BUCKET_NAME is not configured.",
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
+
+    client = storage.Client()
+    bucket = client.bucket(settings.output_bucket_name)
+
+    blobs = [blob for blob in bucket.list_blobs() if blob.name.endswith(".md")]
+
+    blobs.sort(
+        key=lambda blob: blob.time_created or datetime.min,
+        reverse=True,
+    )
+
+    reports_list = [
+        {
+            "filename": blob.name,
+            "title": Path(blob.name).stem.replace("_", " ").replace("-", " ").title(),
+            "created": (
+                blob.time_created.strftime("%d %b %Y %H:%M") if blob.time_created else "Unknown"
+            ),
+        }
+        for blob in blobs
+    ]
+
+    # Log the report files found in the bucket for debugging purposes
+    print(f"Found {len(reports_list)} report(s) in bucket '{settings.output_bucket_name}':")
+    for report in reports_list:
+        print(f" - {report['filename']} (created: {report['created']})")
+
+    return render_template(
+        "reports.html",
+        page_title="View reports",
+        page_config=None,
+        reports=reports_list,
+    )
+
+
+@ui_blueprint.get("/reports/<path:filename>")
+def view_report(filename: str) -> ResponseReturnValue:
+    """Render a markdown report from GCS."""
+
+    # Log the requested filename for debugging purposes
+    print(f"Requested report: {filename}")
+    if not filename.endswith(".md"):
+        return ("Invalid report.", HTTPStatus.BAD_REQUEST)
+
+    settings = current_app.config["settings"]
+    client = storage.Client()
+    bucket = client.bucket(settings.output_bucket_name)
+
+    # Log the attempt to access the blob for debugging purposes
+    print(f"Attempting to access blob '{filename}' in bucket '{settings.output_bucket_name}'")
+    blob = bucket.blob(filename)
+
+    if not blob.exists():
+        return ("Report not found.", HTTPStatus.NOT_FOUND)
+
+    md = blob.download_as_text(encoding="utf-8")
+    html = markdown.markdown(md, extensions=["tables", "fenced_code"])
+
+    return render_template(
+        "example_report.html",
+        page_title=Path(filename).stem.replace("_", " ").replace("-", " ").title(),
+        page_config=None,
+        html_report=html,
+    )
 
 
 @ui_blueprint.route("/review_responses", methods=["GET", "POST"])

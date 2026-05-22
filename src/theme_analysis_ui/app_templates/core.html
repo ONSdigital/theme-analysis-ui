@@ -2,17 +2,27 @@
 {%- if page_title -%} {%- set page_title_value = page_title + ' - Theme Analysis Prototype - Office for National Statistics' -%} {%- else -%} {%- set page_title_value = 'Theme Analysis Prototype - Office for National Statistics' -%} {%- endif -%}
 {%- block head -%}
 {% endblock %}
-{% set navigation= {
+{% set nav_items = [
+    {
+        "url": url_for("ui.index"),
+        "title": "Home"
+    }
+] %}
+
+{% if session.get("authenticated_user") %}
+    {% set _ = nav_items.append({
+        "url": url_for("ui.reports"),
+        "title": "View Reports"
+    }) %}
+{% endif %}
+
+{% set navigation = {
     "navigation": {
         "id": "main-navigation",
-        "itemsList": [
-        {"url": url_for("ui.index"),
-        "title": "Home"},
-        ],
-        "currentPath": current_path
-        }
+        "itemsList": nav_items,
+        "currentPath": request.path
     }
-%}
+} %}
 {% set pageConfig = {
     "meta": {
         "canonicalUrl": "/",
