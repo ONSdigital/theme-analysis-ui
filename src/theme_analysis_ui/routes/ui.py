@@ -513,13 +513,11 @@ def review_responses() -> ResponseReturnValue:
 @ui_blueprint.get("/cancel")
 def cancel() -> ResponseReturnValue:
     pii_report_location = session.get("pii_report_location")
-    flagged_rows = session.get("flagged_rows", [])
 
     return render_template(
         "cancel.html",
         page_title="Upload cancelled",
         pii_report_location=pii_report_location,
-        flagged_rows=flagged_rows,
     )
 
 
