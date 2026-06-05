@@ -23,6 +23,26 @@ TEST_APP_KEY = "unit-test-example-key"  # pragma: allowlist secret
 TEST_PASSWORD = "example-password"  # nosec B105  # pragma: allowlist secret
 
 
+def write_pii_report(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "summary": {},
+                "likely_pii": [
+                    {
+                        "row": 2,
+                        "id": "USER0002",
+                        "text": "Email me at test@example.com",
+                        "likely_pii_entities": [],
+                        "redacted_text": None,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 class RecordingLocalStorageBackend(LocalStorageBackend):
     """Local storage backend that records uploaded payloads for assertions."""
 
@@ -376,18 +396,21 @@ def test_cancel_renders_pii_report_location(
 def test_review_responses_get_renders_flagged_rows(
     test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
 ) -> None:
-    """Ensure review page renders flagged rows from session."""
+    """Ensure review page renders flagged rows from stored PII report."""
 
-    client, _ = test_client
+    client, storage = test_client
+
+    report_path = storage.root / "responses_pii_report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    write_pii_report(report_path)
+
     with client.session_transaction() as flask_session:
         flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
         flask_session["pending_upload"] = {
             "filename": "responses.csv",
             "csv_file": "/tmp/responses.csv",
         }
-        flask_session["flagged_rows"] = [
-            {"row_number": 2, "response_text": "Email me at test@example.com"}
-        ]
+        flask_session["pii_report_location"] = str(report_path)
 
     response = client.get("/review_responses")
 
@@ -411,7 +434,20 @@ def test_post_upload_with_findings_redirects_to_review_responses(
             "flagged_rows": [
                 {"row_number": 2, "response_text": "Email me at test@example.com"},
             ],
-            "report_bytes": b'{"summary": {}}',
+            "report_bytes": json.dumps(
+                {
+                    "summary": {},
+                    "likely_pii": [
+                        {
+                            "row": 2,
+                            "id": "USER0002",
+                            "text": "Email me at test@example.com",
+                            "likely_pii_entities": [],
+                            "redacted_text": None,
+                        }
+                    ],
+                }
+            ).encode("utf-8"),
         },
     )
 
@@ -428,7 +464,6 @@ def test_post_upload_with_findings_redirects_to_review_responses(
     assert response.status_code == 302  # nosec B101
     assert response.headers["Location"].endswith("/review_responses")  # nosec B101
 
-    # Original CSV + PII report should both be stored
     assert len(storage.calls) == 2  # nosec B101
     assert storage.calls[0][1] == "responses.csv"  # nosec B101
     assert storage.calls[1][1] == "responses_pii_report.json"  # nosec B101
@@ -437,9 +472,7 @@ def test_post_upload_with_findings_redirects_to_review_responses(
     with client.session_transaction() as flask_session:
         assert flask_session["pending_upload"]["filename"] == "responses.csv"  # nosec B101
         assert "csv_file" in flask_session["pending_upload"]  # nosec B101
-        assert flask_session["flagged_rows"] == [
-            {"row_number": 2, "response_text": "Email me at test@example.com"}
-        ]  # nosec B101
+        assert "flagged_rows" not in flask_session  # nosec B101
         assert "pii_report_location" in flask_session  # nosec B101
 
 
@@ -454,6 +487,9 @@ def test_review_responses_post_with_acknowledgement_completes_upload(
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     csv_path.write_text("content", encoding="utf-8")
 
+    report_path = storage.root / "responses_pii_report.json"
+    write_pii_report(report_path)
+
     with client.session_transaction() as flask_session:
         flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
         flask_session["meta"] = {"question": "How satisfied are you?"}
@@ -461,9 +497,7 @@ def test_review_responses_post_with_acknowledgement_completes_upload(
             "filename": "responses.csv",
             "csv_file": str(csv_path),
         }
-        flask_session["flagged_rows"] = [
-            {"row_number": 2, "response_text": "Email me at test@example.com"}
-        ]
+        flask_session["pii_report_location"] = str(report_path)
 
     response = client.post(
         "/review_responses",
@@ -481,6 +515,7 @@ def test_review_responses_post_with_acknowledgement_completes_upload(
     with client.session_transaction() as flask_session:
         assert "upload" in flask_session  # nosec B101
         assert "pending_upload" not in flask_session  # nosec B101
+        assert "pii_report_location" not in flask_session  # nosec B101
         assert "flagged_rows" not in flask_session  # nosec B101
 
 
@@ -489,16 +524,19 @@ def test_review_responses_post_without_acknowledgement_returns_error(
 ) -> None:
     """Ensure user must acknowledge disclosure warning before continuing."""
 
-    client, _ = test_client
+    client, storage = test_client
+
+    report_path = storage.root / "responses_pii_report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    write_pii_report(report_path)
+
     with client.session_transaction() as flask_session:
         flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
         flask_session["pending_upload"] = {
             "filename": "responses.csv",
             "csv_file": "/tmp/responses.csv",
         }
-        flask_session["flagged_rows"] = [
-            {"row_number": 2, "response_text": "Email me at test@example.com"}
-        ]
+        flask_session["pii_report_location"] = str(report_path)
 
     response = client.post("/review_responses", data={})
 
@@ -506,6 +544,27 @@ def test_review_responses_post_without_acknowledgement_returns_error(
     page = response.get_data(as_text=True)
     assert "template=review_responses.html" in page  # nosec B101
     assert "Select 'These are ok to ignore' before continuing." in page  # nosec B101
+    assert "Email me at test@example.com" in page  # nosec B101
+
+
+def test_review_responses_redirects_when_pii_report_location_missing(
+    test_client: tuple[FlaskClient, RecordingLocalStorageBackend]
+) -> None:
+    """Ensure review page requires a persisted PII report location."""
+
+    client, _ = test_client
+
+    with client.session_transaction() as flask_session:
+        flask_session[ui_routes.SESSION_USER_KEY] = "user@example.com"
+        flask_session["pending_upload"] = {
+            "filename": "responses.csv",
+            "csv_file": "/tmp/responses.csv",
+        }
+
+    response = client.get("/review_responses")
+
+    assert response.status_code == 302  # nosec B101
+    assert response.headers["Location"].endswith("/theme_meta")  # nosec B101
 
 
 def test_reports_requires_login(
