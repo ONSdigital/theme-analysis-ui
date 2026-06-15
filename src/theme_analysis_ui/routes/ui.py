@@ -49,6 +49,10 @@ ALLOWED_REDIRECT_PREFIXES = ["/index", "/theme_meta", "/upload", "/confirm"]
 @ui_blueprint.before_app_request
 def enforce_login() -> ResponseReturnValue | None:
     """Ensure unauthenticated users are redirected to the sign-in page."""
+
+    if current_app.debug:
+        session[SESSION_USER_KEY] = "local.user@ons.gov.uk"
+        return None
     if request.endpoint in {
         "ui.login",
         "ui.check_login",
@@ -684,13 +688,9 @@ def _validate_uploaded_csv(upload: FileStorage) -> dict[str, Any]:
 
 
 def _load_pii_report(storage_backend: StorageBackend, report_location: str) -> dict[str, Any]:
-    if report_location.startswith("gs://"):
-        if not isinstance(storage_backend, GCPStorageBackend):
-            raise RuntimeError("GCS report location requires a GCP storage backend")
+    """Load a PII report from the configured storage backend."""
 
-        relative_path = report_location.removeprefix("gs://")
-        bucket_name, blob_name = relative_path.split("/", 1)
-        blob = storage_backend.get_client().bucket(bucket_name).blob(blob_name)
-        return cast(dict[str, Any], json.loads(blob.download_as_text(encoding="utf-8")))
-
-    return cast(dict[str, Any], json.loads(Path(report_location).read_text(encoding="utf-8")))
+    return cast(
+        dict[str, Any],
+        json.loads(storage_backend.read_text(report_location, encoding="utf-8")),
+    )

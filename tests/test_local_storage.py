@@ -17,3 +17,13 @@ def test_local_storage_writes_file(tmp_path: Path) -> None:
     saved_path = Path(location)
     assert saved_path.exists()  # nosec B101
     assert saved_path.read_bytes() == b"theme-analyst-report"  # nosec B101
+
+
+def test_local_storage_reads_text_file(tmp_path: Path) -> None:
+    """Ensure text files can be read back through the storage abstraction."""
+
+    backend = LocalStorageBackend(root=tmp_path)
+    path = tmp_path / "report.json"
+    path.write_text('{"status": "ok"}', encoding="utf-8")
+
+    assert backend.read_text(str(path), encoding="utf-8") == '{"status": "ok"}'  # nosec B101
