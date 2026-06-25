@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import BinaryIO, Protocol
+from typing import BinaryIO, Protocol, cast
 from uuid import uuid4
 
 from google.auth.exceptions import DefaultCredentialsError
@@ -54,6 +54,22 @@ class GCPStorageBackend(StorageBackend):
             return f"{self.prefix.strip('/')}/{unique_name}"
         return unique_name
 
+    def _parse_gcs_uri(self, location: str) -> tuple[str, str]:
+        """Parse a ``gs://`` URI into bucket and blob names."""
+
+        if not location.startswith("gs://"):
+            raise ValueError(f"Expected a gs:// URI, got: {location}")
+
+        relative_path = location.removeprefix("gs://")
+        if "/" not in relative_path:
+            raise ValueError(f"Invalid GCS URI: {location}")
+
+        bucket_name, blob_name = relative_path.split("/", 1)
+        if not bucket_name or not blob_name:
+            raise ValueError(f"Invalid GCS URI: {location}")
+
+        return bucket_name, blob_name
+
     def store_file(
         self,
         source: BinaryIO,
@@ -88,3 +104,10 @@ class GCPStorageBackend(StorageBackend):
         blob.upload_from_file(source, content_type=content_type)
 
         return f"gs://{self.bucket_name}/{blob_name}"
+
+    def read_text(self, location: str, *, encoding: str = "utf-8") -> str:
+        """Read a text file from Google Cloud Storage."""
+
+        bucket_name, blob_name = self._parse_gcs_uri(location)
+        blob = self.get_client().bucket(bucket_name).blob(blob_name)
+        return cast(str, blob.download_as_text(encoding=encoding))
