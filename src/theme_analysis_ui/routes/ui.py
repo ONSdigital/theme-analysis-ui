@@ -203,6 +203,7 @@ def confirm() -> ResponseReturnValue:
 
     settings = current_app.config["settings"]
     staging_bucket = settings.bucket_name
+    output_bucket = settings.output_bucket_name
 
     # Get upload information from the session
     upload_info = session.get("upload", {})
@@ -219,6 +220,7 @@ def confirm() -> ResponseReturnValue:
         region=region,
         workflow_name=workflow_name,
         staging_bucket=staging_bucket,
+        output_bucket=output_bucket,
         csv_object=csv_object,
         metadata_object=metadata_object,
         question=question,
@@ -525,6 +527,7 @@ def cancel() -> ResponseReturnValue:
 def start_analysis() -> ResponseReturnValue:
     settings = current_app.config["settings"]
     staging_bucket = settings.bucket_name
+    output_bucket = settings.output_bucket_name
 
     upload_info = session.get("upload", {})
     csv_object = upload_info.get("csv_file")
@@ -540,6 +543,7 @@ def start_analysis() -> ResponseReturnValue:
         region=region,
         workflow_name=workflow_name,
         staging_bucket=staging_bucket,
+        output_bucket=output_bucket,
         csv_object=csv_object,
         metadata_object=metadata_object,
         question=question,
