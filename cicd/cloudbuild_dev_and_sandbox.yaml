@@ -22,9 +22,10 @@ steps:
         fi
 
         echo === Looking up config from parameter store ===
-        dev_config=$(gcloud parametermanager parameters versions describe $_ENV_NAME --parameter=infra-test-config --location=global --project $PROJECT_ID --format=json | python3 -c "import sys, json; print(json.load(sys.stdin)['payload']['data'])" | base64 --decode)
-        THEMES_UI_IMAGE=$(echo $dev_config | python3 -c "import sys, json; print(json.load(sys.stdin)['cr-themes-ui-image'])")
-        TARGET_PROJECT_ID=$(echo $dev_config | python3 -c "import sys, json; print(json.load(sys.stdin)['project-id'])")
+        config=$(gcloud parametermanager parameters versions describe $_ENV_NAME --parameter=infra-test-config --location=global --project $PROJECT_ID --format=json | python3 -c "import sys, json; print(json.load(sys.stdin)['payload']['data'])" | base64 --decode)
+        THEMES_UI_IMAGE=$(echo $config | python3 -c "import sys, json; print(json.load(sys.stdin)['cr-themes-ui-image'])")
+        TARGET_PROJECT_ID=$(echo $config | python3 -c "import sys, json; print(json.load(sys.stdin)['project-id'])")
+        PROXY_API_URL=$(echo $config | python3 -c "import sys, json; print(json.load(sys.stdin)['proxy-api-url'])")
 
         echo === Build Docker image, tag and push to GAR ===
         docker build -t $$THEMES_UI_IMAGE:$SHORT_SHA -t $$THEMES_UI_IMAGE:latest .
@@ -33,6 +34,12 @@ steps:
 
         echo === Deploy themes UI ===
         gcloud run deploy themes-ui --image=$$THEMES_UI_IMAGE:$SHORT_SHA --region $LOCATION --project $$TARGET_PROJECT_ID
+
+        echo === Run smoke tests ===
+        export TARGET_ENVIRONMENT=$_ENV_NAME
+        export UI_SA_ID_TOKEN=$(gcloud auth print-identity-token) # Use CICD service account
+        export THEMES_UI_URL=$$PROXY_API_URL # set to proxy API
+        poetry run pytest -s cicd
 
     id: Run unit tests, build, tag and deploy themes cloud run job
     entrypoint: bash
