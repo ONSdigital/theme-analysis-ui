@@ -11,16 +11,25 @@ steps:
         preprod_config=$(gcloud parametermanager parameters versions describe preprod --parameter=infra-test-config --location=global --project $PROJECT_ID --format=json | python3 -c "import sys, json; print(json.load(sys.stdin)['payload']['data'])" | base64 --decode)
         THEMES_UI_IMAGE_RELEASES=$(echo $preprod_config | python3 -c "import sys, json; print(json.load(sys.stdin)['cr-themes-ui-image'])")
         TARGET_PROJECT_ID=$(echo $preprod_config | python3 -c "import sys, json; print(json.load(sys.stdin)['project-id'])")
+        PROXY_API_URL=$(echo $config | python3 -c "import sys, json; print(json.load(sys.stdin)['proxy-api-url'])")
 
         echo === Pulling image dev image with tag $SHORT_SHA ===
         docker pull $$THEMES_UI_IMAGE_DEV:$SHORT_SHA
 
         echo === Build Docker image, tag and push to GAR ===
         docker tag $$THEMES_UI_IMAGE_DEV:$SHORT_SHA $$THEMES_UI_IMAGE_RELEASES:$TAG_NAME
+        docker tag $$THEMES_UI_IMAGE_DEV:$SHORT_SHA $$THEMES_UI_IMAGE_RELEASES:latest
         docker push $$THEMES_UI_IMAGE_RELEASES:$TAG_NAME
+        docker push $$THEMES_UI_IMAGE_RELEASES:latest
 
         echo === Deploy themes UI ===
         gcloud run deploy themes-ui --image=$$THEMES_UI_IMAGE_RELEASES:$TAG_NAME --region $LOCATION --project $$TARGET_PROJECT_ID
+
+        echo === Run smoke tests ===
+        export TARGET_ENVIRONMENT=$_ENV_NAME
+        export UI_SA_ID_TOKEN=$(gcloud auth print-identity-token) # Use CICD service account
+        export THEMES_UI_URL=$$PROXY_API_URL # set to proxy API
+        poetry run pytest -s cicd
 
     id: Tag and push release image
     entrypoint: bash
