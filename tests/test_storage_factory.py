@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 from _pytest.monkeypatch import MonkeyPatch
+import pytest
 
 from theme_analysis_ui.config import Settings
 from theme_analysis_ui.storage.factory import build_storage_backend
@@ -17,13 +18,18 @@ TEST_APP_KEY = "unit-test-example-key"  # pragma: allowlist secret
 
 
 class DummyBlob:
-    """Fake Cloud Storage blob capturing upload calls."""
+    """Fake Cloud Storage blob capturing upload and download calls."""
 
     def __init__(self) -> None:
         self.uploads: list[tuple[bytes, str]] = []
+        self.text = '{"summary": {}, "likely_pii": []}'
 
     def upload_from_file(self, source: BinaryIO, content_type: str) -> None:
         self.uploads.append((source.read(), content_type))
+
+    def download_as_text(self, encoding: str = "utf-8") -> str:
+        assert encoding == "utf-8"  # nosec B101
+        return self.text
 
 
 class DummyBucket:
@@ -115,3 +121,25 @@ def test_gcp_backend_uploads_via_dummy_client() -> None:
     data, content_type = client.bucket_instance.blob_instance.uploads[0]
     assert data == b"gcp"  # nosec B101
     assert content_type == "text/csv"  # nosec B101
+
+
+def test_gcp_backend_reads_text_via_dummy_client() -> None:
+    """Ensure the Google Cloud Storage backend reads text from a gs:// URI."""
+
+    client = DummyClient()
+    backend = GCPStorageBackend(bucket_name="demo-bucket", client=client)
+
+    result = backend.read_text("gs://demo-bucket/reports/pii_report.json")
+
+    assert result == '{"summary": {}, "likely_pii": []}'  # nosec B101
+    assert client.requested_bucket == "demo-bucket"  # nosec B101
+    assert client.bucket_instance.requested_name == "reports/pii_report.json"  # nosec B101
+
+
+def test_gcp_backend_rejects_invalid_gcs_uri() -> None:
+    """Ensure invalid GCS locations fail with a clear error."""
+
+    backend = GCPStorageBackend(bucket_name="demo-bucket", client=DummyClient())
+
+    with pytest.raises(ValueError, match="Expected a gs:// URI"):
+        backend.read_text("/tmp/pii_report.json")

@@ -19,3 +19,6 @@ class StorageBackend(Protocol):
         Returns:
             str: A URI or filesystem path describing where the file landed.
         """
+
+    def read_text(self, location: str, *, encoding: str = "utf-8") -> str:
+        """Read a stored text file and return its contents."""

@@ -41,6 +41,7 @@ def trigger_workflow(
     region: str,
     workflow_name: str,
     staging_bucket: str,
+    output_bucket: str,
     csv_object: str,
     metadata_object: str,
     question: str,
@@ -55,6 +56,7 @@ def trigger_workflow(
         region: Workflow region.
         workflow_name: Workflow name.
         staging_bucket: GCS bucket containing uploaded files.
+        output_bucket: GCS bucket for workflow outputs.
         csv_object: GCS object path for the CSV.
         metadata_object: GCS object path for the metadata YAML.
         question: Analysis question to pass to downstream processing.
@@ -76,7 +78,7 @@ def trigger_workflow(
         "metadata_object": metadata_object,
         "question": question,
         "output_prefix": output_prefix,
-        "output_bucket": "survey-assist-sandbox-themes-output",
+        "output_bucket": output_bucket,
         "job_name": job_name,
         "job_region": job_region,
     }

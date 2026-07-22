@@ -30,3 +30,7 @@ class LocalStorageBackend(StorageBackend):
         with target_path.open("wb") as handle:
             copyfileobj(source, handle)
         return str(target_path)
+
+    def read_text(self, location: str, *, encoding: str = "utf-8") -> str:
+        """Read a stored local text file."""
+        return Path(location).read_text(encoding=encoding)

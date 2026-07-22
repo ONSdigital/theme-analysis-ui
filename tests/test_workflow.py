@@ -139,6 +139,7 @@ def test_trigger_workflow_creates_execution_with_expected_payload(
         region="europe-west2",
         workflow_name="demo-workflow",
         staging_bucket="demo-staging-bucket",
+        output_bucket="demo-output-bucket",
         csv_object="uploads/session-123/responses.csv",
         metadata_object="uploads/session-123/metadata.yaml",
         question="Why did you rate your GP practice experience as poor?",
@@ -166,7 +167,7 @@ def test_trigger_workflow_creates_execution_with_expected_payload(
         "metadata_object": "uploads/session-123/metadata.yaml",
         "question": "Why did you rate your GP practice experience as poor?",
         "output_prefix": "outputs/session-123",
-        "output_bucket": "survey-assist-sandbox-themes-output",
+        "output_bucket": "demo-output-bucket",
         "job_name": "themes-job",
         "job_region": "europe-west2",
     }
@@ -194,6 +195,7 @@ def test_trigger_workflow_uses_basename_for_csv_file(monkeypatch: MonkeyPatch) -
         region="europe-west2",
         workflow_name="demo-workflow",
         staging_bucket="demo-staging-bucket",
+        output_bucket="demo-output-bucket",
         csv_object="nested/path/to/input-file.csv",
         metadata_object="nested/path/to/metadata.yaml",
         question="What could be improved?",
@@ -207,3 +209,4 @@ def test_trigger_workflow_uses_basename_for_csv_file(monkeypatch: MonkeyPatch) -
 
     assert payload["csv_file"] == "input-file.csv"  # nosec B101
     assert payload["csv_object"] == "nested/path/to/input-file.csv"  # nosec B101
+    assert payload["output_bucket"] == "demo-output-bucket"  # nosec B101

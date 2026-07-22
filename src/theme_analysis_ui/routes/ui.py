@@ -163,7 +163,7 @@ def handle_upload() -> ResponseReturnValue:
             "filename": filename,
             "csv_file": stored_location,
         }
-        session["flagged_rows"] = validation_result["flagged_rows"]
+
         session["pii_report_location"] = report_location
         session.modified = True
 
@@ -203,6 +203,7 @@ def confirm() -> ResponseReturnValue:
 
     settings = current_app.config["settings"]
     staging_bucket = settings.bucket_name
+    output_bucket = settings.output_bucket_name
 
     # Get upload information from the session
     upload_info = session.get("upload", {})
@@ -219,6 +220,7 @@ def confirm() -> ResponseReturnValue:
         region=region,
         workflow_name=workflow_name,
         staging_bucket=staging_bucket,
+        output_bucket=output_bucket,
         csv_object=csv_object,
         metadata_object=metadata_object,
         question=question,
@@ -443,12 +445,23 @@ def view_report(filename: str) -> ResponseReturnValue:
 
 @ui_blueprint.route("/review_responses", methods=["GET", "POST"])
 def review_responses() -> ResponseReturnValue:
-    flagged_rows = session.get("flagged_rows", [])
     pending_upload = session.get("pending_upload")
+    pii_report_location = session.get("pii_report_location")
     errors: list[str] = []
 
-    if not pending_upload:
+    if not pending_upload or not pii_report_location:
         return redirect(url_for("ui.theme_meta"))
+
+    storage: StorageBackend = current_app.config["storage_backend"]
+    pii_report = _load_pii_report(storage, pii_report_location)
+
+    flagged_rows = [
+        {
+            "row_number": item["row"],
+            "response_text": item["text"],
+        }
+        for item in pii_report.get("likely_pii", [])
+    ]
 
     if request.method == "GET":
         return render_template(
@@ -470,7 +483,6 @@ def review_responses() -> ResponseReturnValue:
             HTTPStatus.BAD_REQUEST,
         )
 
-    storage: StorageBackend = current_app.config["storage_backend"]
     stored_location = pending_upload["csv_file"]
 
     metadata_document = _build_theme_metadata_document(stored_location)
@@ -481,8 +493,9 @@ def review_responses() -> ResponseReturnValue:
         "csv_file": stored_location,
         "meta_file": metadata_location,
     }
+
     session.pop("pending_upload", None)
-    session.pop("flagged_rows", None)
+    session.pop("pii_report_location", None)
     session.modified = True
 
     return render_template(
@@ -502,13 +515,11 @@ def review_responses() -> ResponseReturnValue:
 @ui_blueprint.get("/cancel")
 def cancel() -> ResponseReturnValue:
     pii_report_location = session.get("pii_report_location")
-    flagged_rows = session.get("flagged_rows", [])
 
     return render_template(
         "cancel.html",
         page_title="Upload cancelled",
         pii_report_location=pii_report_location,
-        flagged_rows=flagged_rows,
     )
 
 
@@ -516,6 +527,7 @@ def cancel() -> ResponseReturnValue:
 def start_analysis() -> ResponseReturnValue:
     settings = current_app.config["settings"]
     staging_bucket = settings.bucket_name
+    output_bucket = settings.output_bucket_name
 
     upload_info = session.get("upload", {})
     csv_object = upload_info.get("csv_file")
@@ -531,6 +543,7 @@ def start_analysis() -> ResponseReturnValue:
         region=region,
         workflow_name=workflow_name,
         staging_bucket=staging_bucket,
+        output_bucket=output_bucket,
         csv_object=csv_object,
         metadata_object=metadata_object,
         question=question,
@@ -672,3 +685,12 @@ def _validate_uploaded_csv(upload: FileStorage) -> dict[str, Any]:
 
     finally:
         temp_path.unlink(missing_ok=True)
+
+
+def _load_pii_report(storage_backend: StorageBackend, report_location: str) -> dict[str, Any]:
+    """Load a PII report from the configured storage backend."""
+
+    return cast(
+        dict[str, Any],
+        json.loads(storage_backend.read_text(report_location, encoding="utf-8")),
+    )

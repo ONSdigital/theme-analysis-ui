@@ -68,12 +68,12 @@
                         {% endcall %}
                         <br>
                         <div>
-                            {{ onsButton({"text": "Upload file", "type": "submit"}) }}
+                            {{ onsButton({"text": "Upload file", "type": "submit", "variants": "loader",}) }}
                         </div>
                     </form>
                     {% else %}
                     <div>
-                        {{ onsButton({"text": "Confirm choices", "url": url_for('ui.confirm')}) }}
+                        {{ onsButton({"text": "Confirm choices", "url": url_for('ui.confirm'), "variants": "loader"}) }}
                     </div>
                     {% endif %}
                 </main>
